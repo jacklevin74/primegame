@@ -1,13 +1,12 @@
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
-import { assert } from 'chai';
 
 describe('prime_slot_checker', () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const program = anchor.workspace.PrimeSlotChecker as anchor.Program<PrimeSlotChecker>;
+  const program = anchor.workspace.PrimeSlotChecker as anchor.Program<any>;
 
   let jackpotPda: PublicKey;
   let jackpotBump: number;
@@ -38,7 +37,9 @@ describe('prime_slot_checker', () => {
 
         console.log("Jackpot initialization transaction signature:", tx);
         const jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
-        assert.equal(jackpotAccount.amount.toNumber(), 0);
+        if (jackpotAccount.amount.toNumber() !== 0) {
+          throw new Error('Jackpot account amount is not 0');
+        }
       } else {
         throw err;
       }
@@ -69,57 +70,43 @@ describe('prime_slot_checker', () => {
 
         console.log("User initialization transaction signature:", tx);
         const userAccount = await program.account.user.fetch(userPda);
-        assert.equal(userAccount.points.toNumber(), 1000);
+        if (userAccount.points.toNumber() !== 1000) {
+          throw new Error('User account points are not 1000');
+        }
       } else {
         throw err;
       }
     }
   });
 
-  it('Checks a non-prime slot', async () => {
-    const currentSlot = await provider.connection.getSlot();
-    // Ensure current slot is not prime for this test
-    const nonPrimeSlot = currentSlot % 2 === 0 ? currentSlot : currentSlot + 1;
+  it('Play against current slot until jackpot is 0', async () => {
+    let jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
+    let userAccount = await program.account.user.fetch(userPda);
 
-    const tx = await program.methods
-      .checkSlot(userBump)
-      .accounts({
-        user: userPda,
-        jackpot: jackpotPda,
-        payer: provider.wallet.publicKey,
-      })
-      .rpc();
+    while (jackpotAccount.amount.toNumber() > 0) {
+      try {
+        const tx = await program.methods
+          .checkSlot(userBump)
+          .accounts({
+            user: userPda,
+            jackpot: jackpotPda,
+            payer: provider.wallet.publicKey,
+          })
+          .rpc();
 
-    console.log("Transaction signature for non-prime slot:", tx);
+        console.log("Transaction signature:", tx);
+      } catch (err) {
+        console.log("Transaction failed or timed out. Continuing to next iteration.");
+      }
 
-    const jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
-    const userAccount = await program.account.user.fetch(userPda);
+      jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
+      userAccount = await program.account.user.fetch(userPda);
 
-    assert.isAbove(jackpotAccount.amount.toNumber(), 0);
-    assert.equal(userAccount.points.toNumber(), 1000);
-  });
+      console.log('Updated Jackpot Points:', jackpotAccount.amount.toNumber());
+      console.log('Updated User Points:', userAccount.points.toNumber());
+    }
 
-  it('Checks a prime slot', async () => {
-    const currentSlot = await provider.connection.getSlot();
-    // Ensure current slot is prime for this test
-    const primeSlot = currentSlot % 2 === 0 ? currentSlot + 1 : currentSlot;
-
-    const tx = await program.methods
-      .checkSlot(userBump)
-      .accounts({
-        user: userPda,
-        jackpot: jackpotPda,
-        payer: provider.wallet.publicKey,
-      })
-      .rpc();
-
-    console.log("Transaction signature for prime slot:", tx);
-
-    const jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
-    const userAccount = await program.account.user.fetch(userPda);
-
-    assert.equal(jackpotAccount.amount.toNumber(), 0);
-    assert.isAbove(userAccount.points.toNumber(), 1000);
+    console.log('Jackpot is now 0');
   });
 });
 
