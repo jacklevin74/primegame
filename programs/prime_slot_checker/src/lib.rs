@@ -1,7 +1,8 @@
 use anchor_lang::prelude::*;
 use primal::is_prime;
 
-declare_id!("CPEruFKwEu5897J7QeYzjxjkS5UR2eRZgEDchWmZ9v6s");
+declare_id!("HFWRGNgJtwESYZCUEzjUnggdHfq7QufchyvzivT48SaX");
+#[allow(unused_variables)]
 
 #[program]
 pub mod prime_slot_checker {
