@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use std::vec::Vec;
 
 declare_id!("6MsNcwvyQCnze2FJrvL48Xab3ZvjJNaQ45w5vVgHGZXK");
+#[allow(unused_variables)]
 
 #[program]
 pub mod prime_slot_checker {
