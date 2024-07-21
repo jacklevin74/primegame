@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("8gVfgseS6XC9GaqdynugiGYbnJLeFU66MmCy26Ce6h2v");
-#[allow(unused_variables)]
+declare_id!("5zZZ7MxigSo3XRwDsvdPMUtRgwMDvhf1gXmWTtnDM1yK");
 
+#[allow(unused_variables)]
 #[program]
 pub mod prime_slot_checker {
     use super::*;
@@ -11,20 +11,23 @@ pub mod prime_slot_checker {
     pub fn initialize(ctx: Context<Initialize>, _bump: u8) -> Result<()> {
         let jackpot = &mut ctx.accounts.jackpot;
         jackpot.amount = 0;
+        jackpot.winner = Pubkey::default(); // Initialize winner with default Pubkey
         msg!("Jackpot pool initialized with 0 amount.");
         Ok(())
     }
 
     pub fn initialize_user(ctx: Context<InitializeUser>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
+        let payer = &ctx.accounts.payer;
         user.points = 1000;
-        msg!("User initialized with 1000 points.");
+        msg!("User initialized with 1000 points, payer was: {:?}", payer.key());
         Ok(())
     }
 
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let jackpot = &mut ctx.accounts.jackpot;
+        let payer = &ctx.accounts.payer;
 
         // Prevent transaction if user points are 0 or less
         if user.points <= 0 {
@@ -44,7 +47,8 @@ pub mod prime_slot_checker {
         // Check if the resulting number is prime
         if is_prime(number_to_test) {
             user.points += jackpot.amount + 10;
-            msg!("Slot {} + User number {} = {} is prime. User {} rewarded with {} points.", slot, user_number, number_to_test, user.key(), jackpot.amount + 10);
+            jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
+            msg!("Slot {} + User number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, number_to_test, payer.key(), jackpot.amount + 10);
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
             jackpot.amount += 10;
@@ -54,13 +58,14 @@ pub mod prime_slot_checker {
 
         msg!("User {} now has {} points.", user.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
+        msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
     }
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = payer, space = 8 + 8, seeds = [b"jackpot"], bump)]
+    #[account(init, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
     pub jackpot: Account<'info, Jackpot>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -93,6 +98,11 @@ pub struct User {
 #[account]
 pub struct Jackpot {
     pub amount: i64,
+    pub winner: Pubkey,
+}
+
+impl Jackpot {
+    const LEN: usize = 8 + 8 + 32; // Discriminator + amount + Pubkey
 }
 
 // Convert a public key to a number in the range of 1 to 100,000

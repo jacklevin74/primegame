@@ -83,8 +83,10 @@ describe('prime_slot_checker', () => {
     let jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
     let userAccount = await program.account.user.fetch(userPda);
 
-    while (jackpotAccount.amount.toNumber() > -1) {
+    let counter = 0;
+    while (jackpotAccount.amount.toNumber() > -1 && counter < 20)  {
       try {
+	counter++;
         const tx = await program.methods
           .checkSlot(userBump)
           .accounts({
@@ -104,9 +106,9 @@ describe('prime_slot_checker', () => {
 
       console.log('Updated Jackpot Points:', jackpotAccount.amount.toNumber());
       console.log('Updated User Points:', userAccount.points.toNumber());
+      console.log('Jackpot Winner Pubkey:', jackpotAccount.winner.toBase58());
     }
 
-    console.log('Jackpot is now 0');
   });
 });
 
