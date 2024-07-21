@@ -83,7 +83,7 @@ describe('prime_slot_checker', () => {
     let jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
     let userAccount = await program.account.user.fetch(userPda);
 
-    while (jackpotAccount.amount.toNumber() > 0) {
+    while (jackpotAccount.amount.toNumber() > -1) {
       try {
         const tx = await program.methods
           .checkSlot(userBump)

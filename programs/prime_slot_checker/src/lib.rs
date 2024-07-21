@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("6MsNcwvyQCnze2FJrvL48Xab3ZvjJNaQ45w5vVgHGZXK");
+declare_id!("8gVfgseS6XC9GaqdynugiGYbnJLeFU66MmCy26Ce6h2v");
 #[allow(unused_variables)]
 
 #[program]
