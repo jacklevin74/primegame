@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("AHgfWmuvjuCCiBuF1AuqHuKUvTewc9xoYpYmpJoxSGsH");
+declare_id!("3RnRaByX3g7qD5jvGheKh3x8XDkaw4gFjExbCWXD5GEZ");
 
 #[program]
 pub mod prime_slot_checker {
@@ -34,9 +34,15 @@ pub mod prime_slot_checker {
 
     pub fn initialize_user(ctx: Context<InitializeUser>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
-        let payer = &ctx.accounts.payer;
-        user.points = 1000;
-        msg!("User initialized with 1000 points, payer was: {:?}", payer.key());
+
+        // Initialize user points only if they have not been initialized already
+        if user.points == 0 {
+            user.points = 0;
+            msg!("User initialized with 0 points.");
+        } else {
+            msg!("User already initialized with {} points.", user.points);
+        }
+
         Ok(())
     }
 
@@ -96,10 +102,10 @@ pub mod prime_slot_checker {
         update_player_list(player_list, payer.key());
 
         // Log the last 10 user public keys
-        // msg!("Last 10 players: {:?}", recent_players);
+        //msg!("Last 10 players: {:?}", recent_players);
 
-        msg!("User {} now has {} points.", user.key(), user.points);
-        msg!("Jackpot pool now has {} points.", jackpot.amount);
+        //msg!("User {} now has {} points.", user.key(), user.points);
+        //msg!("Jackpot pool now has {} points.", jackpot.amount);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
     }
