@@ -1,18 +1,19 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("5zZZ7MxigSo3XRwDsvdPMUtRgwMDvhf1gXmWTtnDM1yK");
+declare_id!("HA5C9T2RmqoTCzegSdmmQTRxZy9YRvFcMHSJsVNAEph3");
 
-#[allow(unused_variables)]
 #[program]
 pub mod prime_slot_checker {
     use super::*;
 
     pub fn initialize(ctx: Context<Initialize>, _bump: u8) -> Result<()> {
         let jackpot = &mut ctx.accounts.jackpot;
+        let treasury = &mut ctx.accounts.treasury;
         jackpot.amount = 0;
         jackpot.winner = Pubkey::default(); // Initialize winner with default Pubkey
-        msg!("Jackpot pool initialized with 0 amount.");
+        treasury.amount = 0;
+        msg!("Jackpot and Treasury pool initialized with 0 amount.");
         Ok(())
     }
 
@@ -61,12 +62,41 @@ pub mod prime_slot_checker {
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
     }
+
+    pub fn pay_for_points(ctx: Context<PayForPoints>, _bump: u8) -> Result<()> {
+        let user = &mut ctx.accounts.user;
+        let treasury = &mut ctx.accounts.treasury;
+        let payer = &ctx.accounts.payer;
+
+        // Transfer 1 SOL to the treasury using the system program
+        let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+            &payer.key(),
+            &treasury.key(),
+            1_000_000_000,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &transfer_instruction,
+            &[
+                payer.to_account_info(),
+                treasury.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        // Add points to user
+        user.points += 1000;
+        msg!("User {} paid 1 SOL and received 1000 points.", payer.key());
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(init, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
     pub jackpot: Account<'info, Jackpot>,
+    #[account(init, payer = payer, space = Treasury::LEN, seeds = [b"treasury"], bump)]
+    pub treasury: Account<'info, Treasury>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -90,6 +120,16 @@ pub struct CheckSlot<'info> {
     pub payer: Signer<'info>,
 }
 
+#[derive(Accounts)]
+pub struct PayForPoints<'info> {
+    #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
+    pub user: Account<'info, User>,
+    #[account(mut, seeds = [b"treasury"], bump)]
+    pub treasury: Account<'info, Treasury>,
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct User {
     pub points: i64,
@@ -101,8 +141,17 @@ pub struct Jackpot {
     pub winner: Pubkey,
 }
 
+#[account]
+pub struct Treasury {
+    pub amount: i64,
+}
+
 impl Jackpot {
     const LEN: usize = 8 + 8 + 32; // Discriminator + amount + Pubkey
+}
+
+impl Treasury {
+    const LEN: usize = 8 + 8; // Discriminator + amount
 }
 
 // Convert a public key to a number in the range of 1 to 100,000
