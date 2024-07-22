@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("GYRYg9FkC6qTNWU2QMrkFEWimChKo86vYecKGw5n9KJa");
+declare_id!("88ZCEmnWHgVAiPJa64qEUjZH2T7kdqu62wdaDrAvfY3M");
 
 #[program]
 pub mod prime_slot_checker {
@@ -28,6 +28,7 @@ pub mod prime_slot_checker {
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let jackpot = &mut ctx.accounts.jackpot;
+        let treasury = &mut ctx.accounts.treasury;
         let payer = &ctx.accounts.payer;
 
         // Prevent transaction if user points are 0 or less
@@ -50,6 +51,16 @@ pub mod prime_slot_checker {
             user.points += jackpot.amount + 10;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, number_to_test, payer.key(), jackpot.amount + 10);
+
+            // Transfer the entire balance from treasury to the user
+            let treasury_balance = **treasury.to_account_info().lamports.borrow();
+            let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
+            let transfer_amount = treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?;
+            **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
+            **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
+            
+            msg!("Transferred {} lamports from treasury to user {}", transfer_amount, payer.key());
+
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
             jackpot.amount += 10;
@@ -117,6 +128,8 @@ pub struct CheckSlot<'info> {
     pub user: Account<'info, User>,
     #[account(mut, seeds = [b"jackpot"], bump)]
     pub jackpot: Account<'info, Jackpot>,
+    #[account(mut, seeds = [b"treasury"], bump)]
+    pub treasury: Account<'info, Treasury>,
     pub payer: Signer<'info>,
 }
 
@@ -183,3 +196,4 @@ fn is_prime(n: u64) -> bool {
     }
     true
 }
+
