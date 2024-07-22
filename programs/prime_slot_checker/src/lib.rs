@@ -19,15 +19,13 @@ pub mod prime_slot_checker {
             msg!("Jackpot pool initialized with 0 amount.");
         }
 
-        if treasury.amount == 0 {
-            treasury.amount = 0;
-            msg!("Treasury pool initialized with 0 amount.");
-        }
-
         if player_list.players.is_empty() {
             player_list.players = Vec::new();
             msg!("Player List initialized.");
         }
+
+        // Only log treasury initialization, do not reinitialize or reset lamports
+        msg!("Treasury account initialized {}", treasury.key());
 
         Ok(())
     }
@@ -89,7 +87,7 @@ pub mod prime_slot_checker {
             **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
             **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
 
-            msg!("Transferred {} lamports from treasury to user {}", transfer_amount, payer.key());
+            msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
 
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
@@ -104,8 +102,8 @@ pub mod prime_slot_checker {
         // Log the last 10 user public keys
         //msg!("Last 10 players: {:?}", recent_players);
 
-        //msg!("User {} now has {} points.", user.key(), user.points);
-        //msg!("Jackpot pool now has {} points.", jackpot.amount);
+        msg!("User {} now has {} points.", user.key(), user.points);
+        msg!("Jackpot pool now has {} points.", jackpot.amount);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
     }
