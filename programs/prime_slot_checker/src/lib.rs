@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("HA5C9T2RmqoTCzegSdmmQTRxZy9YRvFcMHSJsVNAEph3");
+declare_id!("GYRYg9FkC6qTNWU2QMrkFEWimChKo86vYecKGw5n9KJa");
 
 #[program]
 pub mod prime_slot_checker {
@@ -183,4 +183,3 @@ fn is_prime(n: u64) -> bool {
     }
     true
 }
-
