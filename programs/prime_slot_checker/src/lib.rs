@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("88ZCEmnWHgVAiPJa64qEUjZH2T7kdqu62wdaDrAvfY3M");
+declare_id!("HA5C9T2RmqoTCzegSdmmQTRxZy9YRvFcMHSJsVNAEph3");
 
 #[program]
 pub mod prime_slot_checker {
@@ -52,12 +52,23 @@ pub mod prime_slot_checker {
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, number_to_test, payer.key(), jackpot.amount + 10);
 
-            // Transfer the entire balance from treasury to the user
+            // Transfer the entire balance from treasury to the user using the system program
             let treasury_balance = **treasury.to_account_info().lamports.borrow();
             let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
             let transfer_amount = treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?;
-            **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
-            **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
+            let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+                &treasury.key(),
+                &payer.key(),
+                transfer_amount,
+            );
+            anchor_lang::solana_program::program::invoke(
+                &transfer_instruction,
+                &[
+                    treasury.to_account_info(),
+                    payer.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+            )?;
             
             msg!("Transferred {} lamports from treasury to user {}", transfer_amount, payer.key());
 
@@ -131,6 +142,7 @@ pub struct CheckSlot<'info> {
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: Account<'info, Treasury>,
     pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
