@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("8XNFxzof2yfqfqWHEUEHzrs3Wuw2uS2gLU7nVWzxGTsQ");
+declare_id!("AHgfWmuvjuCCiBuF1AuqHuKUvTewc9xoYpYmpJoxSGsH");
 
 #[program]
 pub mod prime_slot_checker {
@@ -10,10 +10,25 @@ pub mod prime_slot_checker {
     pub fn initialize(ctx: Context<Initialize>, _bump: u8) -> Result<()> {
         let jackpot = &mut ctx.accounts.jackpot;
         let treasury = &mut ctx.accounts.treasury;
-        jackpot.amount = 0;
-        jackpot.winner = Pubkey::default(); // Initialize winner with default Pubkey
-        treasury.amount = 0;
-        msg!("Jackpot and Treasury pool initialized with 0 amount.");
+        let player_list = &mut ctx.accounts.player_list;
+
+        // Initialize only if they have not been initialized already
+        if jackpot.amount == 0 && jackpot.winner == Pubkey::default() {
+            jackpot.amount = 0;
+            jackpot.winner = Pubkey::default(); // Initialize winner with default Pubkey
+            msg!("Jackpot pool initialized with 0 amount.");
+        }
+
+        if treasury.amount == 0 {
+            treasury.amount = 0;
+            msg!("Treasury pool initialized with 0 amount.");
+        }
+
+        if player_list.players.is_empty() {
+            player_list.players = Vec::new();
+            msg!("Player List initialized.");
+        }
+
         Ok(())
     }
 
@@ -30,6 +45,7 @@ pub mod prime_slot_checker {
         let jackpot = &mut ctx.accounts.jackpot;
         let treasury = &mut ctx.accounts.treasury;
         let payer = &ctx.accounts.payer;
+        let player_list = &mut ctx.accounts.player_list;
 
         // Prevent transaction if user points are 0 or less
         if user.points <= 0 {
@@ -43,14 +59,22 @@ pub mod prime_slot_checker {
         // Get the current slot
         let slot = Clock::get()?.slot;
 
-        // Add user number to current slot
-        let number_to_test = slot + user_number as u64;
+        // Convert last 10 players' pubkeys to numbers and add to slot
+        let recent_players: Vec<Pubkey> = player_list.players.iter().rev().take(10).cloned().collect();
+        let recent_players_sum: u64 = recent_players.iter().map(|pk| pubkey_to_number(pk) as u64).sum();
+
+        // Get current UNIX time and convert to number
+        let unix_time = Clock::get()?.unix_timestamp;
+        let time_number = (unix_time % 100_000) as u64;
+
+        // Calculate the number to test
+        let number_to_test = slot + user_number as u64 + recent_players_sum + time_number;
 
         // Check if the resulting number is prime
         if is_prime(number_to_test) {
             user.points += jackpot.amount + 10;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
-            msg!("Slot {} + User number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, number_to_test, payer.key(), jackpot.amount + 10);
+            msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), jackpot.amount + 10);
 
             // Transfer the entire balance from treasury to the user
             let treasury_balance = **treasury.to_account_info().lamports.borrow();
@@ -58,15 +82,21 @@ pub mod prime_slot_checker {
             let transfer_amount = treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?;
             **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
             **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
-            
+
             msg!("Transferred {} lamports from treasury to user {}", transfer_amount, payer.key());
 
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
             jackpot.amount += 10;
             user.points -= 10;
-            msg!("Slot {} + User number {} = {} is not prime. Jackpot pool increased by 10 points.", slot, user_number, number_to_test);
+            msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is not prime. Jackpot pool increased by 10 points.", slot, user_number, recent_players_sum, time_number, number_to_test);
         }
+
+        // Update the player list with the latest user
+        update_player_list(player_list, payer.key());
+
+        // Log the last 10 user public keys
+        // msg!("Last 10 players: {:?}", recent_players);
 
         msg!("User {} now has {} points.", user.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
@@ -102,12 +132,21 @@ pub mod prime_slot_checker {
     }
 }
 
+fn update_player_list(player_list: &mut Account<PlayerList>, new_player: Pubkey) {
+    if player_list.players.len() >= 10 {
+        player_list.players.remove(0);
+    }
+    player_list.players.push(new_player);
+}
+
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(init_if_needed, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
     pub jackpot: Account<'info, Jackpot>,
     #[account(init_if_needed, payer = payer, space = Treasury::LEN, seeds = [b"treasury"], bump)]
     pub treasury: Account<'info, Treasury>,
+    #[account(init_if_needed, payer = payer, space = PlayerList::LEN, seeds = [b"player_list"], bump)]
+    pub player_list: Account<'info, PlayerList>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -130,6 +169,8 @@ pub struct CheckSlot<'info> {
     pub jackpot: Account<'info, Jackpot>,
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: Account<'info, Treasury>,
+    #[account(mut, seeds = [b"player_list"], bump)]
+    pub player_list: Account<'info, PlayerList>,
     pub payer: Signer<'info>,
 }
 
@@ -157,6 +198,15 @@ pub struct Jackpot {
 #[account]
 pub struct Treasury {
     pub amount: i64,
+}
+
+#[account]
+pub struct PlayerList {
+    pub players: Vec<Pubkey>,
+}
+
+impl PlayerList {
+    const LEN: usize = 8 + (32 * 20) + 32; // Discriminator + 20 Pubkeys
 }
 
 impl Jackpot {

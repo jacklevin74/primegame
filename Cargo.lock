@@ -1150,6 +1150,7 @@ name = "prime_slot_checker"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "solana-program",
 ]
 
 [[package]]

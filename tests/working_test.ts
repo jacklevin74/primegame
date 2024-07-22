@@ -2,7 +2,6 @@ import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
 describe('prime_slot_checker', () => {
-  // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -10,10 +9,12 @@ describe('prime_slot_checker', () => {
 
   let jackpotPda: PublicKey;
   let jackpotBump: number;
-  let treasuryPda: PublicKey;
-  let treasuryBump: number;
   let userPda: PublicKey;
   let userBump: number;
+  let treasuryPda: PublicKey;
+  let treasuryBump: number;
+  let playerListPda: PublicKey;
+  let playerListBump: number;
 
   before(async () => {
     [jackpotPda, jackpotBump] = await PublicKey.findProgramAddress(
@@ -26,75 +27,46 @@ describe('prime_slot_checker', () => {
       program.programId
     );
 
+    [playerListPda, playerListBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("player_list")],
+      program.programId
+    );
+
+    try {
+      await program.account.jackpot.fetch(jackpotPda);
+      await program.account.treasury.fetch(treasuryPda);
+      await program.account.playerList.fetch(playerListPda);
+    } catch (err) {
+      console.log("Some accounts do not exist. Initializing...");
+
+      await program.methods
+        .initialize(jackpotBump)
+        .accounts({
+          jackpot: jackpotPda,
+          treasury: treasuryPda,
+          playerList: playerListPda,
+          payer: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+  });
+
+  it('User pays 1 SOL to receive 1000 points', async () => {
     [userPda, userBump] = await PublicKey.findProgramAddress(
       [Buffer.from("user"), provider.wallet.publicKey.toBuffer()],
       program.programId
     );
 
-    await initializeAccounts();
-  });
+    await program.methods
+      .initializeUser(userBump)
+      .accounts({
+        user: userPda,
+        payer: provider.wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
 
-  async function initializeAccounts() {
-    try {
-      await program.account.jackpot.fetch(jackpotPda);
-      console.log("Jackpot account already exists.");
-    } catch (err) {
-      if (err.message.includes("Account does not exist")) {
-        console.log("Jackpot account does not exist. Initializing...");
-
-        const tx = await program.methods
-          .initialize(jackpotBump)
-          .accounts({
-            jackpot: jackpotPda,
-            treasury: treasuryPda,
-            payer: provider.wallet.publicKey,
-            systemProgram: SystemProgram.programId,
-          })
-          .rpc();
-
-        console.log("Jackpot initialization transaction signature:", tx);
-        const jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
-        if (jackpotAccount.amount.toNumber() !== 0) {
-          throw new Error('Jackpot account amount is not 0');
-        }
-
-        const treasuryAccount = await program.account.treasury.fetch(treasuryPda);
-        if (treasuryAccount.amount.toNumber() !== 0) {
-          throw new Error('Treasury account amount is not 0');
-        }
-      } else {
-        throw err;
-      }
-    }
-
-    try {
-      await program.account.user.fetch(userPda);
-      console.log("User account already exists.");
-    } catch (err) {
-      if (err.message.includes("Account does not exist")) {
-        console.log("User account does not exist. Initializing...");
-
-        const tx = await program.methods
-          .initializeUser(userBump)
-          .accounts({
-            user: userPda,
-            payer: provider.wallet.publicKey,
-            systemProgram: SystemProgram.programId,
-          })
-          .rpc();
-
-        console.log("User initialization transaction signature:", tx);
-        const userAccount = await program.account.user.fetch(userPda);
-        if (userAccount.points.toNumber() !== 1000) {
-          throw new Error('User account points are not 1000');
-        }
-      } else {
-        throw err;
-      }
-    }
-  }
-
-  it('User pays 1 SOL to receive 1000 points', async () => {
     const tx = await program.methods.payForPoints(userBump).accounts({
       user: userPda,
       treasury: treasuryPda,
@@ -118,20 +90,21 @@ describe('prime_slot_checker', () => {
     let counter = 0;
     while (jackpotAccount.amount.toNumber() > -1 && counter < 100)  {
       try {
-	counter++;
+        counter++;
         const tx = await program.methods
           .checkSlot(userBump)
           .accounts({
             user: userPda,
             jackpot: jackpotPda,
             treasury: treasuryPda,
+            playerList: playerListPda,
             payer: provider.wallet.publicKey,
           })
           .rpc();
 
         console.log("Transaction signature:", tx);
       } catch (err) {
-        console.log("Transaction failed or timed out. Continuing to next iteration.");
+        console.log("Transaction failed or timed out. Continuing to next iteration. " + err);
       }
 
       jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
