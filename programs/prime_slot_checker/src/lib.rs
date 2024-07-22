@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("88ZCEmnWHgVAiPJa64qEUjZH2T7kdqu62wdaDrAvfY3M");
+declare_id!("8XNFxzof2yfqfqWHEUEHzrs3Wuw2uS2gLU7nVWzxGTsQ");
 
 #[program]
 pub mod prime_slot_checker {
@@ -104,9 +104,9 @@ pub mod prime_slot_checker {
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    #[account(init, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
+    #[account(init_if_needed, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
     pub jackpot: Account<'info, Jackpot>,
-    #[account(init, payer = payer, space = Treasury::LEN, seeds = [b"treasury"], bump)]
+    #[account(init_if_needed, payer = payer, space = Treasury::LEN, seeds = [b"treasury"], bump)]
     pub treasury: Account<'info, Treasury>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -115,7 +115,7 @@ pub struct Initialize<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeUser<'info> {
-    #[account(init, payer = payer, space = 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
     pub user: Account<'info, User>,
     #[account(mut)]
     pub payer: Signer<'info>,

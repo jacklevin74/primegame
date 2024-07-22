@@ -1,7 +1,7 @@
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
-describe('prime_slot_checker - Initialize Treasury', () => {
+describe('prime_slot_checker', () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -16,10 +16,6 @@ describe('prime_slot_checker - Initialize Treasury', () => {
   let userBump: number;
 
   before(async () => {
-    await initializeAccounts();
-  });
-
-  async function initializeAccounts() {
     [jackpotPda, jackpotBump] = await PublicKey.findProgramAddress(
       [Buffer.from("jackpot")],
       program.programId
@@ -35,6 +31,10 @@ describe('prime_slot_checker - Initialize Treasury', () => {
       program.programId
     );
 
+    await initializeAccounts();
+  });
+
+  async function initializeAccounts() {
     try {
       await program.account.jackpot.fetch(jackpotPda);
       console.log("Jackpot account already exists.");
@@ -42,34 +42,26 @@ describe('prime_slot_checker - Initialize Treasury', () => {
       if (err.message.includes("Account does not exist")) {
         console.log("Jackpot account does not exist. Initializing...");
 
-        const tx = await program.methods.initialize(jackpotBump).accounts({
-          jackpot: jackpotPda,
-          treasury: treasuryPda,
-          payer: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        }).rpc();
+        const tx = await program.methods
+          .initialize(jackpotBump)
+          .accounts({
+            jackpot: jackpotPda,
+            treasury: treasuryPda,
+            payer: provider.wallet.publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc();
 
         console.log("Jackpot initialization transaction signature:", tx);
-      } else {
-        throw err;
-      }
-    }
+        const jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
+        if (jackpotAccount.amount.toNumber() !== 0) {
+          throw new Error('Jackpot account amount is not 0');
+        }
 
-    try {
-      await program.account.treasury.fetch(treasuryPda);
-      console.log("Treasury account already exists.");
-    } catch (err) {
-      if (err.message.includes("Account does not exist")) {
-        console.log("Treasury account does not exist. Initializing...");
-
-        const tx = await program.methods.initialize(jackpotBump).accounts({
-          jackpot: jackpotPda,
-          treasury: treasuryPda,
-          payer: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        }).rpc();
-
-        console.log("Treasury initialization transaction signature:", tx);
+        const treasuryAccount = await program.account.treasury.fetch(treasuryPda);
+        if (treasuryAccount.amount.toNumber() !== 0) {
+          throw new Error('Treasury account amount is not 0');
+        }
       } else {
         throw err;
       }
@@ -82,25 +74,27 @@ describe('prime_slot_checker - Initialize Treasury', () => {
       if (err.message.includes("Account does not exist")) {
         console.log("User account does not exist. Initializing...");
 
-        const tx = await program.methods.initializeUser(userBump).accounts({
-          user: userPda,
-          payer: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        }).rpc();
+        const tx = await program.methods
+          .initializeUser(userBump)
+          .accounts({
+            user: userPda,
+            payer: provider.wallet.publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc();
 
         console.log("User initialization transaction signature:", tx);
+        const userAccount = await program.account.user.fetch(userPda);
+        if (userAccount.points.toNumber() !== 1000) {
+          throw new Error('User account points are not 1000');
+        }
       } else {
         throw err;
       }
     }
   }
 
-  it('Treasury is initialized', async () => {
-    const treasuryAccount = await program.account.treasury.fetch(treasuryPda);
-    console.log('Treasury Points:', treasuryAccount.amount.toNumber());
-  });
-
- it('User pays 1 SOL to receive 1000 points', async () => {
+  it('User pays 1 SOL to receive 1000 points', async () => {
     const tx = await program.methods.payForPoints(userBump).accounts({
       user: userPda,
       treasury: treasuryPda,
@@ -108,7 +102,7 @@ describe('prime_slot_checker - Initialize Treasury', () => {
       systemProgram: SystemProgram.programId,
     }).rpc();
 
-    console.log("Paid for points transaction signature:", tx);
+    console.log("Paid for points Transaction signature:", tx);
 
     const userAccount = await program.account.user.fetch(userPda);
     console.log('User Points:', userAccount.points.toNumber());
@@ -122,16 +116,18 @@ describe('prime_slot_checker - Initialize Treasury', () => {
     let userAccount = await program.account.user.fetch(userPda);
 
     let counter = 0;
-    while (jackpotAccount.amount.toNumber() > -1 && counter < 100) {
+    while (jackpotAccount.amount.toNumber() > -1 && counter < 100)  {
       try {
-        counter++;
-        const tx = await program.methods.checkSlot(userBump).accounts({
-          user: userPda,
-          jackpot: jackpotPda,
-          treasury: treasuryPda,
-          payer: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        }).rpc();
+	counter++;
+        const tx = await program.methods
+          .checkSlot(userBump)
+          .accounts({
+            user: userPda,
+            jackpot: jackpotPda,
+            treasury: treasuryPda,
+            payer: provider.wallet.publicKey,
+          })
+          .rpc();
 
         console.log("Transaction signature:", tx);
       } catch (err) {
@@ -146,6 +142,5 @@ describe('prime_slot_checker - Initialize Treasury', () => {
       console.log('Jackpot Winner Pubkey:', jackpotAccount.winner.toBase58());
     }
   });
-
 });
 
