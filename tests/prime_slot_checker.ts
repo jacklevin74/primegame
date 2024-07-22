@@ -84,7 +84,7 @@ describe('prime_slot_checker', () => {
     let userAccount = await program.account.user.fetch(userPda);
 
     let counter = 0;
-    while (jackpotAccount.amount.toNumber() > -1 && counter < 5)  {
+    while (jackpotAccount.amount.toNumber() > -1 && counter < 100)  {
       try {
 	counter++;
         const tx = await program.methods
