@@ -97,8 +97,8 @@ describe('prime_slot_checker', () => {
     const userAccount = await program.account.user.fetch(userPda);
     console.log('User Points:', userAccount.points.toNumber());
 
-    const treasuryAccount = await program.account.treasury.fetch(treasuryPda);
-    console.log('Treasury Points:', treasuryAccount.amount.toNumber());
+    const treasuryBalance = await provider.connection.getBalance(treasuryPda);
+    console.log(" Treasury Balance: " + treasuryBalance/1000000000 + " SOL");
   });
 
   it('Play against current slot until jackpot is 0', async () => {
@@ -108,7 +108,6 @@ describe('prime_slot_checker', () => {
     let counter = 0;
     while (jackpotAccount.amount.toNumber() > -1 && counter < 10)  {
       try {
-        sleep(500);
         counter++;
         const tx = await program.methods
           .checkSlot(userBump)
@@ -137,6 +136,14 @@ describe('prime_slot_checker', () => {
 
     // Fetch and display the leaderboard
     const leaderboardAccount = await program.account.leaderboard.fetch(leaderboardPda);
-    console.log('Leaderboard:', leaderboardAccount.users);
+    console.log('Leaderboard:', leaderboardAccount.users.map(userEntry => ({
+      user: userEntry.user.toBase58(),
+      points: userEntry.points.toNumber(),
+    })));
+
+
+    const treasuryBalance = await provider.connection.getBalance(treasuryPda);
+    console.log('Treasury Balance:', treasuryBalance/1000000000 + " SOL");
   });
 });
+
