@@ -30,6 +30,20 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+    pub fn initialize_leaderboard(ctx: Context<InitializeLeaderboard>, _bump: u8) -> Result<()> {
+        let leaderboard = &mut ctx.accounts.leaderboard;
+
+        // Initialize only if it has not been initialized already
+        if leaderboard.users.is_empty() {
+            leaderboard.users = Vec::new();
+            msg!("Leaderboard initialized.");
+        } else {
+            msg!("Leaderboard already initialized with {} entries.", leaderboard.users.len());
+        }
+
+        Ok(())
+    }
+
     pub fn initialize_user(ctx: Context<InitializeUser>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
 
@@ -50,6 +64,7 @@ pub mod prime_slot_checker {
         let treasury = &mut ctx.accounts.treasury;
         let payer = &ctx.accounts.payer;
         let player_list = &mut ctx.accounts.player_list;
+        let leaderboard = &mut ctx.accounts.leaderboard;
 
         // Prevent transaction if user points are 0 or less
         if user.points <= 0 {
@@ -100,7 +115,7 @@ pub mod prime_slot_checker {
         update_player_list(player_list, payer.key());
 
         // Log the last 10 user public keys
-        //msg!("Last 10 players: {:?}", recent_players);
+        update_leaderboard(leaderboard, payer.key(), user.points);
 
         msg!("User {} now has {} points.", user.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
@@ -143,14 +158,35 @@ fn update_player_list(player_list: &mut Account<PlayerList>, new_player: Pubkey)
     player_list.players.push(new_player);
 }
 
+fn update_leaderboard(leaderboard: &mut Account<Leaderboard>, user: Pubkey, points: i64) {
+    // Remove the user if they are already in the leaderboard
+    leaderboard.users.retain(|entry| entry.user != user);
+
+    // Add the user back with updated points
+    leaderboard.users.push(UserEntry { user, points });
+
+    // Sort the leaderboard by points in descending order and keep only the top 100
+    leaderboard.users.sort_by(|a, b| b.points.cmp(&a.points));
+    leaderboard.users.truncate(100);
+}
+
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(init_if_needed, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
-    pub jackpot: Account<'info, Jackpot>,
+    pub jackpot: Box<Account<'info, Jackpot>>,
     #[account(init_if_needed, payer = payer, space = Treasury::LEN, seeds = [b"treasury"], bump)]
-    pub treasury: Account<'info, Treasury>,
+    pub treasury: Box<Account<'info, Treasury>>,
     #[account(init_if_needed, payer = payer, space = PlayerList::LEN, seeds = [b"player_list"], bump)]
-    pub player_list: Account<'info, PlayerList>,
+    pub player_list: Box<Account<'info, PlayerList>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeLeaderboard<'info> {
+    #[account(init_if_needed, payer = payer, space = Leaderboard::LEN, seeds = [b"leaderboard"], bump)]
+    pub leaderboard: Box<Account<'info, Leaderboard>>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -159,7 +195,7 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct InitializeUser<'info> {
     #[account(init_if_needed, payer = payer, space = 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
-    pub user: Account<'info, User>,
+    pub user: Box<Account<'info, User>>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -168,22 +204,24 @@ pub struct InitializeUser<'info> {
 #[derive(Accounts)]
 pub struct CheckSlot<'info> {
     #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
-    pub user: Account<'info, User>,
+    pub user: Box<Account<'info, User>>,
     #[account(mut, seeds = [b"jackpot"], bump)]
-    pub jackpot: Account<'info, Jackpot>,
+    pub jackpot: Box<Account<'info, Jackpot>>,
     #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: Account<'info, Treasury>,
+    pub treasury: Box<Account<'info, Treasury>>,
     #[account(mut, seeds = [b"player_list"], bump)]
-    pub player_list: Account<'info, PlayerList>,
+    pub player_list: Box<Account<'info, PlayerList>>,
+    #[account(mut, seeds = [b"leaderboard"], bump)]
+    pub leaderboard: Box<Account<'info, Leaderboard>>,
     pub payer: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct PayForPoints<'info> {
     #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
-    pub user: Account<'info, User>,
+    pub user: Box<Account<'info, User>>,
     #[account(mut, seeds = [b"treasury"], bump)]
-    pub treasury: Account<'info, Treasury>,
+    pub treasury: Box<Account<'info, Treasury>>,
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -209,6 +247,17 @@ pub struct PlayerList {
     pub players: Vec<Pubkey>,
 }
 
+#[account]
+pub struct Leaderboard {
+    pub users: Vec<UserEntry>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct UserEntry {
+    pub user: Pubkey,
+    pub points: i64,
+}
+
 impl PlayerList {
     const LEN: usize = 8 + (32 * 20) + 32; // Discriminator + 20 Pubkeys
 }
@@ -219,6 +268,10 @@ impl Jackpot {
 
 impl Treasury {
     const LEN: usize = 8 + 8; // Discriminator + amount
+}
+
+impl Leaderboard {
+    const LEN: usize = 8 + (32 + 8) * 100; // Discriminator + 100 UserEntry
 }
 
 // Convert a public key to a number in the range of 1 to 100,000
@@ -250,4 +303,3 @@ fn is_prime(n: u64) -> bool {
     }
     true
 }
-

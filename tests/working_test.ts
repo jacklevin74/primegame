@@ -15,6 +15,8 @@ describe('prime_slot_checker', () => {
   let treasuryBump: number;
   let playerListPda: PublicKey;
   let playerListBump: number;
+  let leaderboardPda: PublicKey;
+  let leaderboardBump: number;
 
   before(async () => {
     [jackpotPda, jackpotBump] = await PublicKey.findProgramAddress(
@@ -32,6 +34,11 @@ describe('prime_slot_checker', () => {
       program.programId
     );
 
+    [leaderboardPda, leaderboardBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("leaderboard")],
+      program.programId
+    );
+
     try {
       await program.account.jackpot.fetch(jackpotPda);
       await program.account.treasury.fetch(treasuryPda);
@@ -45,6 +52,22 @@ describe('prime_slot_checker', () => {
           jackpot: jackpotPda,
           treasury: treasuryPda,
           playerList: playerListPda,
+          payer: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    // Initialize the leaderboard separately
+    try {
+      await program.account.leaderboard.fetch(leaderboardPda);
+    } catch (err) {
+      console.log("Leaderboard account does not exist. Initializing...");
+
+      await program.methods
+        .initializeLeaderboard(leaderboardBump)
+        .accounts({
+          leaderboard: leaderboardPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -84,11 +107,14 @@ describe('prime_slot_checker', () => {
   });
 
   it('Play against current slot until jackpot is 0', async () => {
+    // Wait for 3 seconds before running the test
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     let jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
     let userAccount = await program.account.user.fetch(userPda);
 
     let counter = 0;
-    while (jackpotAccount.amount.toNumber() > -1 && counter < 100)  {
+    while (jackpotAccount.amount.toNumber() > -1 && counter < 10)  {
       try {
         counter++;
         const tx = await program.methods
@@ -98,6 +124,7 @@ describe('prime_slot_checker', () => {
             jackpot: jackpotPda,
             treasury: treasuryPda,
             playerList: playerListPda,
+            leaderboard: leaderboardPda,
             payer: provider.wallet.publicKey,
           })
           .rpc();
@@ -114,6 +141,13 @@ describe('prime_slot_checker', () => {
       console.log('Updated User Points:', userAccount.points.toNumber());
       console.log('Jackpot Winner Pubkey:', jackpotAccount.winner.toBase58());
     }
+
+    // Fetch and display the leaderboard
+    const leaderboardAccount = await program.account.leaderboard.fetch(leaderboardPda);
+    console.log('Leaderboard:', leaderboardAccount.users.map(userEntry => ({
+      user: userEntry.user.toBase58(),
+      points: userEntry.points.toNumber(),
+    })));
   });
 });
 
