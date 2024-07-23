@@ -90,7 +90,7 @@ pub mod prime_slot_checker {
         let number_to_test = slot + user_number as u64 + recent_players_sum + time_number;
 
         // Check if the resulting number is prime
-        if is_prime(number_to_test) {
+        if is_prime(number_to_test, 5) {
             user.points += jackpot.amount + 10;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), jackpot.amount + 10);
@@ -283,8 +283,8 @@ fn pubkey_to_number(pubkey: &Pubkey) -> u32 {
     (number % 100_000) + 1
 }
 
-// Check if a number is prime using trial division
-fn is_prime(n: u64) -> bool {
+// Check if a number is prime using the Miller-Rabin test
+fn is_prime(n: u64, k: u32) -> bool {
     if n <= 1 {
         return false;
     }
@@ -294,12 +294,57 @@ fn is_prime(n: u64) -> bool {
     if n % 2 == 0 || n % 3 == 0 {
         return false;
     }
-    let mut i = 5;
-    while i * i <= n {
-        if n % i == 0 || n % (i + 2) == 0 {
+
+    let mut d = n - 1;
+    while d % 2 == 0 {
+        d /= 2;
+    }
+
+    for _ in 0..k {
+        if !miller_rabin_test(d, n) {
             return false;
         }
-        i += 6;
     }
     true
 }
+
+// Miller-Rabin test for a single witness
+fn miller_rabin_test(d: u64, n: u64) -> bool {
+    let clock = Clock::get().unwrap();
+    let unix_time = clock.unix_timestamp;
+    let a: u64 = 2 + (unix_time as u64 % (n - 3)); // Ensuring a is in range 2..n-2
+    let mut x = mod_exp(a, d, n);
+
+    if x == 1 || x == n - 1 {
+        return true;
+    }
+
+    let mut d = d;
+    while d != n - 1 {
+        x = mod_exp(x, 2, n);
+        d *= 2;
+
+        if x == 1 {
+            return false;
+        }
+        if x == n - 1 {
+            return true;
+        }
+    }
+    false
+}
+
+// Modular exponentiation
+fn mod_exp(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
+    let mut result = 1;
+    base = base % modulus;
+    while exp > 0 {
+        if exp % 2 == 1 {
+            result = (result * base) % modulus;
+        }
+        exp = exp >> 1;
+        base = (base * base) % modulus;
+    }
+    result
+}
+
