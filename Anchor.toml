@@ -13,8 +13,8 @@ url = "https://api.apr.dev"
 
 [provider]
 cluster = "http://xolana.xen.network:8899"
-# wallet = "~/.config/solana/id.json"
-wallet = "./key.json"
+ wallet = "~/.config/solana/id.json"
+# wallet = "./key.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

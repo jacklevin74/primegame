@@ -1,6 +1,12 @@
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 
+// Function to add delay using a simple loop
+function sleep(ms: number) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {}
+}
+
 describe('prime_slot_checker', () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -43,6 +49,7 @@ describe('prime_slot_checker', () => {
       await program.account.jackpot.fetch(jackpotPda);
       await program.account.treasury.fetch(treasuryPda);
       await program.account.playerList.fetch(playerListPda);
+      await program.account.leaderboard.fetch(leaderboardPda);
     } catch (err) {
       console.log("Some accounts do not exist. Initializing...");
 
@@ -52,27 +59,15 @@ describe('prime_slot_checker', () => {
           jackpot: jackpotPda,
           treasury: treasuryPda,
           playerList: playerListPda,
-          payer: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
-    }
-
-    // Initialize the leaderboard separately
-    try {
-      await program.account.leaderboard.fetch(leaderboardPda);
-    } catch (err) {
-      console.log("Leaderboard account does not exist. Initializing...");
-
-      await program.methods
-        .initializeLeaderboard(leaderboardBump)
-        .accounts({
           leaderboard: leaderboardPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
         .rpc();
     }
+
+    // Wait for 3 seconds after initialization
+    sleep(3000);
   });
 
   it('User pays 1 SOL to receive 1000 points', async () => {
@@ -107,15 +102,13 @@ describe('prime_slot_checker', () => {
   });
 
   it('Play against current slot until jackpot is 0', async () => {
-    // Wait for 3 seconds before running the test
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
     let jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
     let userAccount = await program.account.user.fetch(userPda);
 
     let counter = 0;
     while (jackpotAccount.amount.toNumber() > -1 && counter < 10)  {
       try {
+        sleep(500);
         counter++;
         const tx = await program.methods
           .checkSlot(userBump)
@@ -144,10 +137,6 @@ describe('prime_slot_checker', () => {
 
     // Fetch and display the leaderboard
     const leaderboardAccount = await program.account.leaderboard.fetch(leaderboardPda);
-    console.log('Leaderboard:', leaderboardAccount.users.map(userEntry => ({
-      user: userEntry.user.toBase58(),
-      points: userEntry.points.toNumber(),
-    })));
+    console.log('Leaderboard:', leaderboardAccount.users);
   });
 });
-
