@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("9xrPr8YaSKANY6wF4nrLwZWR4YWiGJMSUojVnjoeaEMC");
+declare_id!("F2fBkGDGsgSMgTTtneQJDDKxCuGhsCrjKv9pz5BH1sTk");
 
 #[program]
 pub mod prime_slot_checker {
@@ -119,7 +119,7 @@ pub mod prime_slot_checker {
 
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
-            let reward_points = (jackpot.amount as f64 * power_up) as i64 + 10;
+            let reward_points = (jackpot.amount as f64 * power_up) as i64;
             user.points += reward_points;
             user.won_points += reward_points;
             user.last_won_slot = slot;
@@ -129,7 +129,13 @@ pub mod prime_slot_checker {
             transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
             msg!("User won with {} power-up", power_up);
 
-            jackpot.amount -= reward_points;
+            // Adjust jackpot amount to ensure it doesn't go below zero
+            if jackpot.amount >= reward_points {
+                jackpot.amount -= reward_points;
+            } else {
+                jackpot.amount = 0;
+            }
+
         } else {
             jackpot.amount += 10;
             user.points -= 10;
