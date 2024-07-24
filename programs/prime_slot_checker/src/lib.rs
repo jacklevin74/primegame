@@ -129,7 +129,7 @@ pub mod prime_slot_checker {
             transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
             msg!("User won with {} power-up", power_up);
 
-            jackpot.amount = 0; // Reset the jackpot pool
+            jackpot.amount -= reward_points;
         } else {
             jackpot.amount += 10;
             user.points -= 10;
