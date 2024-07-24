@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("3RnRaByX3g7qD5jvGheKh3x8XDkaw4gFjExbCWXD5GEZ");
+declare_id!("FDGEZTjDfubte5zp9PVBDVDe12DC35N7r8ZAKfPDZ1G5");
 
 #[program]
 pub mod prime_slot_checker {
@@ -48,11 +48,15 @@ pub mod prime_slot_checker {
         let user = &mut ctx.accounts.user;
 
         // Initialize user points only if they have not been initialized already
-        if user.points == 0 {
+        if user.points == 0 && user.won_points == 0 {
             user.points = 0;
-            msg!("User initialized with 0 points.");
+            user.won_points = 0;
+            msg!("User initialized with 0 points and 0 won points.");
+        } else if user.points == 0 {
+            user.points = 0;
+            msg!("User initialized with 0 points and {} won points.", user.won_points);
         } else {
-            msg!("User already initialized with {} points.", user.points);
+            msg!("User already initialized with {} points and {} won points.", user.points, user.won_points);
         }
 
         Ok(())
@@ -92,6 +96,7 @@ pub mod prime_slot_checker {
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
             user.points += jackpot.amount + 10;
+            user.won_points += jackpot.amount + 10;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), jackpot.amount + 10);
 
@@ -117,7 +122,7 @@ pub mod prime_slot_checker {
         // Log the last 10 user public keys
         update_leaderboard(leaderboard, payer.key(), user.points);
 
-        msg!("User {} now has {} points.", user.key(), user.points);
+        msg!("User {} now has {} points.", payer.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
@@ -194,7 +199,7 @@ pub struct InitializeLeaderboard<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeUser<'info> {
-    #[account(init_if_needed, payer = payer, space = 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
     pub user: Box<Account<'info, User>>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -229,6 +234,7 @@ pub struct PayForPoints<'info> {
 #[account]
 pub struct User {
     pub points: i64,
+    pub won_points: i64,
 }
 
 #[account]
