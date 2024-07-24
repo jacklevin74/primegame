@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("6CqxdcbWwvkHiNFuYQndvuuwXBm9x9AcQedFGGLkZv6Z");
+declare_id!("9xrPr8YaSKANY6wF4nrLwZWR4YWiGJMSUojVnjoeaEMC");
 
 #[program]
 pub mod prime_slot_checker {
@@ -30,6 +30,14 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+    pub fn initialize_staking_treasury(ctx: Context<InitializeStakingTreasury>) -> Result<()> {
+        let staking_treasury = &ctx.accounts.staking_treasury;
+
+        msg!("Staking Treasury account initialized {}", staking_treasury.key());
+
+        Ok(())
+    }
+
     pub fn initialize_leaderboard(ctx: Context<InitializeLeaderboard>, _bump: u8) -> Result<()> {
         let leaderboard = &mut ctx.accounts.leaderboard;
 
@@ -51,12 +59,13 @@ pub mod prime_slot_checker {
         if user.points == 0 && user.won_points == 0 {
             user.points = 0;
             user.won_points = 0;
+            user.last_won_slot = 0;
             msg!("User initialized with 0 points and 0 won points.");
         } else if user.points == 0 {
             user.points = 0;
             msg!("User initialized with 0 points and {} won points.", user.won_points);
         } else {
-            msg!("User already initialized with {} points and {} won points.", user.points, user.won_points);
+            msg!("User already initialized with {} points and {} won points and last won slot {} ", user.points, user.won_points, user.last_won_slot);
         }
 
         Ok(())
@@ -81,6 +90,21 @@ pub mod prime_slot_checker {
 
         // Get the current slot
         let slot = Clock::get()?.slot;
+        let last_won_slot = user.last_won_slot;
+
+        // Calculate the power-up percentage based on the slot difference
+        let slots_since_last_win = slot - last_won_slot;
+        let power_up = if last_won_slot == 0 {
+            0.1 // New user
+        } else if slots_since_last_win >= 600 {
+            0.75
+        } else if slots_since_last_win >= 300 {
+            0.5
+        } else if slots_since_last_win >= 100 {
+            0.25
+        } else {
+            0.1
+        };
 
         // Convert last 10 players' pubkeys to numbers and add to slot
         let recent_players: Vec<Pubkey> = player_list.players.iter().rev().take(10).cloned().collect();
@@ -95,21 +119,15 @@ pub mod prime_slot_checker {
 
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
-            user.points += jackpot.amount + 10;
-            user.won_points += jackpot.amount + 10;
+            let reward_points = (jackpot.amount as f64 * power_up) as i64 + 10;
+            user.points += reward_points;
+            user.won_points += reward_points;
+            user.last_won_slot = slot;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
-            msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), jackpot.amount + 10);
+            msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
 
-            // Transfer the entire balance from treasury to the user
-            /*
-            let treasury_balance = **treasury.to_account_info().lamports.borrow();
-            let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
-            let transfer_amount = treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?;
-            **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
-            **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
-            */
-        
-            transfer_from_treasury(treasury, payer, number_to_test)?;
+            transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
+            msg!("User won with {} power-up", power_up);
 
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
@@ -159,15 +177,15 @@ pub mod prime_slot_checker {
     }
 }
 
-fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64) -> Result<()> {
+fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
     let treasury_balance = **treasury.to_account_info().lamports.borrow();
     let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
 
-    // Calculate the amount to transfer based on the prime number ending
+    // Calculate the amount to transfer based on the prime number ending and power-up
     let transfer_amount = if number_to_test % 100 == 1 {
         treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?
     } else {
-        treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)? * 75 / 100
+        (treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)? as f64 * power_up) as u64
     };
 
     **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
@@ -210,6 +228,15 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeStakingTreasury<'info> {
+    #[account(init_if_needed, payer = payer, space = 8, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct InitializeLeaderboard<'info> {
     #[account(init_if_needed, payer = payer, space = Leaderboard::LEN, seeds = [b"leaderboard"], bump)]
     pub leaderboard: Box<Account<'info, Leaderboard>>,
@@ -220,7 +247,7 @@ pub struct InitializeLeaderboard<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeUser<'info> {
-    #[account(init_if_needed, payer = payer, space = 8 + 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = payer, space = 8 + 8 + 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
     pub user: Box<Account<'info, User>>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -256,6 +283,7 @@ pub struct PayForPoints<'info> {
 pub struct User {
     pub points: i64,
     pub won_points: i64,
+    pub last_won_slot: u64,
 }
 
 #[account]
@@ -263,6 +291,9 @@ pub struct Jackpot {
     pub amount: i64,
     pub winner: Pubkey,
 }
+
+#[account]
+pub struct StakingTreasury {}
 
 #[account]
 pub struct Treasury {
