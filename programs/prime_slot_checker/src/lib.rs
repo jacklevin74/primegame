@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("FDGEZTjDfubte5zp9PVBDVDe12DC35N7r8ZAKfPDZ1G5");
+declare_id!("6CqxdcbWwvkHiNFuYQndvuuwXBm9x9AcQedFGGLkZv6Z");
 
 #[program]
 pub mod prime_slot_checker {
@@ -120,10 +120,11 @@ pub mod prime_slot_checker {
         update_player_list(player_list, payer.key());
 
         // Log the last 10 user public keys
-        update_leaderboard(leaderboard, payer.key(), user.points);
+        update_leaderboard(leaderboard, payer.key(), user.won_points);
 
         msg!("User {} now has {} points.", payer.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
+        msg!("User {} has {} won points.", payer.key(), user.won_points);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
         Ok(())
     }
