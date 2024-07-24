@@ -101,13 +101,15 @@ pub mod prime_slot_checker {
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), jackpot.amount + 10);
 
             // Transfer the entire balance from treasury to the user
+            /*
             let treasury_balance = **treasury.to_account_info().lamports.borrow();
             let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
             let transfer_amount = treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?;
             **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
             **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
-
-            msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
+            */
+        
+            transfer_from_treasury(treasury, payer, number_to_test)?;
 
             jackpot.amount = 0; // Reset the jackpot pool
         } else {
@@ -155,6 +157,24 @@ pub mod prime_slot_checker {
 
         Ok(())
     }
+}
+
+fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64) -> Result<()> {
+    let treasury_balance = **treasury.to_account_info().lamports.borrow();
+    let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
+
+    // Calculate the amount to transfer based on the prime number ending
+    let transfer_amount = if number_to_test % 100 == 1 {
+        treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)?
+    } else {
+        treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)? * 75 / 100
+    };
+
+    **treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
+    **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
+
+    msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
+    Ok(())
 }
 
 fn update_player_list(player_list: &mut Account<PlayerList>, new_player: Pubkey) {
