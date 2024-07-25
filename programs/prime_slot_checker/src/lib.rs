@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("F2fBkGDGsgSMgTTtneQJDDKxCuGhsCrjKv9pz5BH1sTk");
+declare_id!("3RTzsw2nuhkxKzckRyVbvvP6GEAxzetjn3YXAVHr42vb");
 
 #[program]
 pub mod prime_slot_checker {
@@ -29,12 +29,16 @@ pub mod prime_slot_checker {
 
         Ok(())
     }
+    
+    pub fn initialize_total_won_points(ctx: Context<InitializeTotalWonPoints>) -> Result<()> {
+        let total_won_points = &ctx.accounts.total_won_points;
+        msg!("TotalWonPoints account initialized {}", total_won_points.key());
+        Ok(())
+    }
 
     pub fn initialize_staking_treasury(ctx: Context<InitializeStakingTreasury>) -> Result<()> {
         let staking_treasury = &ctx.accounts.staking_treasury;
-
         msg!("Staking Treasury account initialized {}", staking_treasury.key());
-
         Ok(())
     }
 
@@ -78,6 +82,7 @@ pub mod prime_slot_checker {
         let payer = &ctx.accounts.payer;
         let player_list = &mut ctx.accounts.player_list;
         let leaderboard = &mut ctx.accounts.leaderboard;
+        let total_won_points = &mut ctx.accounts.total_won_points;
 
         // Prevent transaction if user points are 0 or less
         if user.points <= 0 {
@@ -122,6 +127,7 @@ pub mod prime_slot_checker {
             let reward_points = (jackpot.amount as f64 * power_up) as i64;
             user.points += reward_points;
             user.won_points += reward_points;
+            total_won_points.points += reward_points;
             user.last_won_slot = slot;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
@@ -158,6 +164,7 @@ pub mod prime_slot_checker {
     pub fn pay_for_points(ctx: Context<PayForPoints>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let treasury = &mut ctx.accounts.treasury;
+        let staking_treasury = &mut ctx.accounts.staking_treasury;
         let payer = &ctx.accounts.payer;
 
         // Transfer 1 SOL to the treasury using the system program
@@ -171,6 +178,21 @@ pub mod prime_slot_checker {
             &[
                 payer.to_account_info(),
                 treasury.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        // Transfer 0.1 SOL to the staking treasury
+        let staking_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
+            &payer.key(),
+            &staking_treasury.key(),
+            100_000_000,
+        );
+        anchor_lang::solana_program::program::invoke(
+            &staking_transfer_instruction,
+            &[
+                payer.to_account_info(),
+                staking_treasury.to_account_info(),
                 ctx.accounts.system_program.to_account_info(),
             ],
         )?;
@@ -234,8 +256,17 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeTotalWonPoints <'info> {
+    #[account(init_if_needed, payer = payer, space = TotalWonPoints::LEN, seeds = [b"total_won_points"], bump)]
+    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct InitializeStakingTreasury<'info> {
-    #[account(init_if_needed, payer = payer, space = 8, seeds = [b"staking_treasury"], bump)]
+    #[account(init_if_needed, payer = payer, space = StakingTreasury::LEN, seeds = [b"staking_treasury"], bump)]
     pub staking_treasury: Box<Account<'info, StakingTreasury>>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -266,6 +297,8 @@ pub struct CheckSlot<'info> {
     pub user: Box<Account<'info, User>>,
     #[account(mut, seeds = [b"jackpot"], bump)]
     pub jackpot: Box<Account<'info, Jackpot>>,
+    #[account(mut, seeds = [b"total_won_points"], bump)]
+    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: Box<Account<'info, Treasury>>,
     #[account(mut, seeds = [b"player_list"], bump)]
@@ -281,6 +314,8 @@ pub struct PayForPoints<'info> {
     pub user: Box<Account<'info, User>>,
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: Box<Account<'info, Treasury>>,
+    #[account(mut, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -300,6 +335,11 @@ pub struct Jackpot {
 
 #[account]
 pub struct StakingTreasury {}
+
+#[account]
+pub struct TotalWonPoints {
+    pub points: i64,
+}
 
 #[account]
 pub struct Treasury {
@@ -330,12 +370,20 @@ impl Jackpot {
     const LEN: usize = 8 + 8 + 32; // Discriminator + amount + Pubkey
 }
 
+impl TotalWonPoints {
+    const LEN: usize = 8 + 8; // Discriminator + amount
+}
+
 impl Treasury {
     const LEN: usize = 8 + 8; // Discriminator + amount
 }
 
 impl Leaderboard {
     const LEN: usize = 8 + (32 + 8) * 100; // Discriminator + 100 UserEntry
+}
+
+impl StakingTreasury {
+    const LEN: usize = 8; // Discriminator
 }
 
 // Convert a public key to a number in the range of 1 to 100,000

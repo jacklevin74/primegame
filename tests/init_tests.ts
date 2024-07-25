@@ -15,8 +15,12 @@ describe('prime_slot_checker_account_check', () => {
   let playerListBump: number;
   let leaderboardPda: PublicKey;
   let leaderboardBump: number;
+  let stakingTreasuryPda: PublicKey;
+  let stakingTreasuryBump: number;
   let userPda: PublicKey;
   let userBump: number;
+  let totalWonPointsPda: PublicKey;
+  let totalWonPointsBump: number;
 
   before(async () => {
     [jackpotPda, jackpotBump] = await PublicKey.findProgramAddress(
@@ -39,8 +43,18 @@ describe('prime_slot_checker_account_check', () => {
       program.programId
     );
 
+    [stakingTreasuryPda, stakingTreasuryBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("staking_treasury")],
+      program.programId
+    );
+
     [userPda, userBump] = await PublicKey.findProgramAddress(
       [Buffer.from("user"), provider.wallet.publicKey.toBuffer()],
+      program.programId
+    );
+
+    [totalWonPointsPda, totalWonPointsBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("total_won_points")],
       program.programId
     );
 
@@ -62,6 +76,7 @@ describe('prime_slot_checker_account_check', () => {
           treasury: treasuryPda,
           playerList: playerListPda,
           leaderboard: leaderboardPda,
+          stakingTreasury: stakingTreasuryPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -85,6 +100,7 @@ describe('prime_slot_checker_account_check', () => {
           treasury: treasuryPda,
           playerList: playerListPda,
           leaderboard: leaderboardPda,
+          stakingTreasury: stakingTreasuryPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -108,6 +124,7 @@ describe('prime_slot_checker_account_check', () => {
           treasury: treasuryPda,
           playerList: playerListPda,
           leaderboard: leaderboardPda,
+          stakingTreasury: stakingTreasuryPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -152,6 +169,40 @@ describe('prime_slot_checker_account_check', () => {
         .initializeUser(userBump)
         .accounts({
           user: userPda,
+          payer: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    try {
+      const stakingTreasuryAccount = await program.account.stakingTreasury.fetch(stakingTreasuryPda);
+      console.log("Staking Treasury Account:", {
+        publicKey: stakingTreasuryPda.toBase58(),
+      });
+    } catch (err) {
+      console.log(`Staking Treasury Account (${stakingTreasuryPda.toBase58()}) does not exist. Initializing...`);
+      await program.methods
+        .initializeStakingTreasury()
+        .accounts({
+          stakingTreasury: stakingTreasuryPda,
+          payer: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+    }
+
+    try {
+      const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
+      console.log("Total Won Points Account:", {
+        publicKey: totalWonPointsPda.toBase58(),
+      });
+    } catch (err) {
+      console.log(`Total Won Points Account (${totalWonPointsPda.toBase58()}) does not exist. Initializing...`);
+      await program.methods
+        .initializeTotalWonPoints()
+        .accounts({
+          totalWonPoints: totalWonPointsPda,
           payer: provider.wallet.publicKey,
           systemProgram: SystemProgram.programId,
         })
@@ -223,6 +274,24 @@ describe('prime_slot_checker_account_check', () => {
       });
     } catch (err) {
       console.error("User Account fetch error:", err);
+    }
+
+    try {
+      const stakingTreasuryAccount = await program.account.stakingTreasury.fetch(stakingTreasuryPda);
+      console.log("Staking Treasury Account:", {
+        publicKey: stakingTreasuryPda.toBase58(),
+      });
+    } catch (err) {
+      console.error("Staking Treasury Account fetch error:", err);
+    }
+
+    try {
+      const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
+      console.log("Total Won Points Account:", {
+        publicKey: totalWonPointsPda.toBase58(),
+      });
+    } catch (err) {
+      console.error("Total Won Points Account fetch error:", err);
     }
   });
 });

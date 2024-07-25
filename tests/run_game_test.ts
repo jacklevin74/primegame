@@ -19,6 +19,10 @@ describe('prime_slot_checker', () => {
   let userBump: number;
   let treasuryPda: PublicKey;
   let treasuryBump: number;
+  let stakingTreasuryPda: PublicKey;
+  let stakingTreasuryBump: number;
+  let totalWonPointsPda: PublicKey;
+  let totalWonPointsBump: number;
   let playerListPda: PublicKey;
   let playerListBump: number;
   let leaderboardPda: PublicKey;
@@ -35,6 +39,16 @@ describe('prime_slot_checker', () => {
       program.programId
     );
 
+    [totalWonPointsPda, totalWonPointsBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("total_won_points")],
+      program.programId
+    );
+
+    [stakingTreasuryPda, stakingTreasuryBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("staking_treasury")],
+      program.programId
+    );
+
     [playerListPda, playerListBump] = await PublicKey.findProgramAddress(
       [Buffer.from("player_list")],
       program.programId
@@ -45,11 +59,12 @@ describe('prime_slot_checker', () => {
       program.programId
     );
 
-     await program.account.jackpot.fetch(jackpotPda);
-     await program.account.treasury.fetch(treasuryPda);
-     await program.account.playerList.fetch(playerListPda);
-     await program.account.leaderboard.fetch(leaderboardPda);
-
+    await program.account.jackpot.fetch(jackpotPda);
+    await program.account.treasury.fetch(treasuryPda);
+    await program.account.stakingTreasury.fetch(stakingTreasuryPda);
+    await program.account.totalWonPoints.fetch(totalWonPointsPda);
+    await program.account.playerList.fetch(playerListPda);
+    await program.account.leaderboard.fetch(leaderboardPda);
   });
 
   it('Play against current slot until jackpot is 0', async () => {
@@ -82,13 +97,15 @@ describe('prime_slot_checker', () => {
             user: userPda,
             jackpot: jackpotPda,
             treasury: treasuryPda,
+            stakingTreasury: stakingTreasuryPda,
+            totalWonPoints: totalWonPointsPda,
             playerList: playerListPda,
             leaderboard: leaderboardPda,
             payer: provider.wallet.publicKey,
           })
           .rpc();
 
-        console.log("Transaction signature:", tx);
+        console.log("\nTransaction signature:", tx);
       } catch (err) {
         console.error("Transaction failed or timed out in iteration", counter, ":", err);
       }
@@ -96,16 +113,19 @@ describe('prime_slot_checker', () => {
       try {
         jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
         userAccount = await program.account.user.fetch(userPda);
-
+        const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
         const payerBalance = await provider.connection.getBalance(provider.wallet.publicKey);
         const treasuryBalance = await provider.connection.getBalance(treasuryPda);
+        const stakingTreasuryBalance = await provider.connection.getBalance(stakingTreasuryPda);
 
         console.log('Updated Jackpot Points:', jackpotAccount.amount.toNumber());
         console.log('Updated User Points:', userAccount.points.toNumber());
         console.log('Updated User Won Points:', userAccount.wonPoints ? userAccount.wonPoints.toNumber() : 0);
+        console.log('Updated Total Won Points:', totalWonPointsAccount.points.toNumber());
         console.log('Jackpot Winner Pubkey:', jackpotAccount.winner.toBase58());
         console.log('Payer Balance:', payerBalance / 1000000000 + " SOL");
         console.log('Treasury Balance:', treasuryBalance / 1000000000 + " SOL");
+        console.log('Staking Treasury Balance:', stakingTreasuryBalance / 1000000000 + " SOL");
       } catch (err) {
         console.error("Fetch Error in iteration", counter, ":", err);
         console.error("Problematic Accounts:");
@@ -123,12 +143,19 @@ describe('prime_slot_checker', () => {
       })));
 
       const treasuryBalance = await provider.connection.getBalance(treasuryPda);
+      const stakingTreasuryBalance = await provider.connection.getBalance(stakingTreasuryPda);
+      const wonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
+
       console.log('Treasury Balance:', treasuryBalance / 1000000000 + " SOL");
+      console.log('Staking Treasury Balance:', stakingTreasuryBalance / 1000000000 + " SOL");
+      console.log('Total Won Points:', wonPointsAccount.points.toNumber());
     } catch (err) {
       console.error("Fetch Error for leaderboard or treasury balance:", err);
       console.error("Problematic Accounts:");
       console.error(`Leaderboard Account: ${leaderboardPda.toBase58()}`);
       console.error(`Treasury Account: ${treasuryPda.toBase58()}`);
+      console.error(`Staking Treasury Account: ${stakingTreasuryPda.toBase58()}`);
+      console.error(`Total Won Points Account: ${totalWonPointsPda.toBase58()}`);
       throw new Error("Fetch failed for leaderboard or treasury balance. Exiting tests.");
     }
   });
