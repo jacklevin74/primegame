@@ -161,6 +161,9 @@ describe('prime_slot_checker_account_check', () => {
         content: {
           points: userAccount.points.toString(),
           wonPoints: userAccount.wonPoints.toString(),
+          lastWonSlot: userAccount.lastWonSlot.toString(),
+          lastClaimedSlot: userAccount.lastClaimedSlot.toString(),
+          lastClaimedLamports: userAccount.lastClaimedLamports.toString(),
         },
       });
     } catch (err) {
@@ -196,6 +199,9 @@ describe('prime_slot_checker_account_check', () => {
       const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
       console.log("Total Won Points Account:", {
         publicKey: totalWonPointsPda.toBase58(),
+        content: {
+          points: totalWonPointsAccount.points.toString(),
+        },
       });
     } catch (err) {
       console.log(`Total Won Points Account (${totalWonPointsPda.toBase58()}) does not exist. Initializing...`);
@@ -270,6 +276,9 @@ describe('prime_slot_checker_account_check', () => {
         content: {
           points: userAccount.points.toString(),
           wonPoints: userAccount.wonPoints.toString(),
+          lastWonSlot: userAccount.lastWonSlot.toString(),
+          lastClaimedSlot: userAccount.lastClaimedSlot.toString(),
+          lastClaimedLamports: userAccount.lastClaimedLamports.toString(),
         },
       });
     } catch (err) {
@@ -289,6 +298,9 @@ describe('prime_slot_checker_account_check', () => {
       const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
       console.log("Total Won Points Account:", {
         publicKey: totalWonPointsPda.toBase58(),
+        content: {
+          points: totalWonPointsAccount.points.toString(),
+        },
       });
     } catch (err) {
       console.error("Total Won Points Account fetch error:", err);

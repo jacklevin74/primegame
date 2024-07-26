@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use std::vec::Vec;
 
-declare_id!("3RTzsw2nuhkxKzckRyVbvvP6GEAxzetjn3YXAVHr42vb");
+declare_id!("B4FMCpibTGdZhxHHNgWWnwk5PhhKdST37uFRY6TVksaj");
 
 #[program]
 pub mod prime_slot_checker {
@@ -29,7 +29,7 @@ pub mod prime_slot_checker {
 
         Ok(())
     }
-    
+
     pub fn initialize_total_won_points(ctx: Context<InitializeTotalWonPoints>) -> Result<()> {
         let total_won_points = &ctx.accounts.total_won_points;
         msg!("TotalWonPoints account initialized {}", total_won_points.key());
@@ -64,6 +64,9 @@ pub mod prime_slot_checker {
             user.points = 0;
             user.won_points = 0;
             user.last_won_slot = 0;
+            user.last_claimed_slot = 0;
+            user.last_claimed_lamports = 0;
+
             msg!("User initialized with 0 points and 0 won points.");
         } else if user.points == 0 {
             user.points = 0;
@@ -127,7 +130,7 @@ pub mod prime_slot_checker {
             let reward_points = (jackpot.amount as f64 * power_up) as i64;
             user.points += reward_points;
             user.won_points += reward_points;
-            total_won_points.points += reward_points;
+            total_won_points.points += reward_points as u64;
             user.last_won_slot = slot;
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
@@ -203,6 +206,75 @@ pub mod prime_slot_checker {
 
         Ok(())
     }
+/*
+    pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
+        let user = &ctx.accounts.user;
+        let total_won_points = &ctx.accounts.total_won_points;
+
+        let ratio = user.won_points as f64 / total_won_points.points as f64;
+        msg!("User ratio: {}", ratio);
+        msg!("User last claimed slot: {}", user.last_claimed_slot);
+        msg!("User last claimed lamports: {}", user.last_claimed_lamports);
+
+        // Additional logic for claiming lamports will go here.
+
+        Ok(())
+    }
+}
+*/
+
+pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
+    let user = &mut ctx.accounts.user;
+    let total_won_points = &ctx.accounts.total_won_points;
+    let staking_treasury = &mut ctx.accounts.staking_treasury;
+    let payer = &ctx.accounts.payer;
+
+    // Calculate the ratio of user's won points to total won points
+    let ratio = user.won_points as f64 / total_won_points.points as f64;
+    msg!("User ratio: {}", ratio);
+    msg!("User last claimed slot: {}", user.last_claimed_slot);
+    msg!("User last claimed lamports: {}", user.last_claimed_lamports);
+
+    // Get the current slot
+    let current_slot = Clock::get()?.slot;
+
+    // Transfer lamports from staking treasury to the payer
+    let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
+
+    // Update user's last claimed slot and last claimed lamports
+    user.last_claimed_slot = current_slot;
+    user.last_claimed_lamports = lamports_transferred;
+
+    msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
+    msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
+
+    Ok(())
+    }
+}
+
+
+
+fn transfer_from_staking_treasury(
+    staking_treasury: &mut Account<StakingTreasury>,
+    payer: &Signer,
+    ratio: f64,
+) -> Result<u64> {
+    let staking_treasury_balance = **staking_treasury.to_account_info().lamports.borrow();
+    let rent_exemption = Rent::get()?.minimum_balance(staking_treasury.to_account_info().data_len());
+
+    // Calculate the amount to transfer based on the ratio
+    let transfer_amount = (staking_treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)? as f64 * ratio) as u64;
+
+    // Ensure the calculated transfer amount doesn't exceed the balance minus rent exemption
+    if transfer_amount > staking_treasury_balance.checked_sub(rent_exemption).ok_or(ProgramError::InsufficientFunds)? {
+        return Err(ProgramError::InsufficientFunds.into());
+    }
+
+    **staking_treasury.to_account_info().lamports.borrow_mut() -= transfer_amount;
+    **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
+
+    msg!("Transferred {} lamports from staking treasury {} to user {}", transfer_amount, staking_treasury.key(), payer.key());
+    Ok(transfer_amount)
 }
 
 fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
@@ -284,7 +356,7 @@ pub struct InitializeLeaderboard<'info> {
 
 #[derive(Accounts)]
 pub struct InitializeUser<'info> {
-    #[account(init_if_needed, payer = payer, space = 8 + 8 + 8 + 8, seeds = [b"user", payer.key().as_ref()], bump)]
+    #[account(init_if_needed, payer = payer, space = User::LEN, seeds = [b"user", payer.key().as_ref()], bump)]
     pub user: Box<Account<'info, User>>,
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -320,11 +392,25 @@ pub struct PayForPoints<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct ClaimLamports<'info> {
+    #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
+    pub user: Box<Account<'info, User>>,
+    #[account(mut, seeds = [b"total_won_points"], bump)]
+    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
+    #[account(mut, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[account]
 pub struct User {
     pub points: i64,
     pub won_points: i64,
     pub last_won_slot: u64,
+    pub last_claimed_slot: u64,
+    pub last_claimed_lamports: u64,
 }
 
 #[account]
@@ -338,7 +424,7 @@ pub struct StakingTreasury {}
 
 #[account]
 pub struct TotalWonPoints {
-    pub points: i64,
+    pub points: u64,
 }
 
 #[account]
@@ -364,6 +450,10 @@ pub struct UserEntry {
 
 impl PlayerList {
     const LEN: usize = 8 + (32 * 20) + 32; // Discriminator + 20 Pubkeys
+}
+
+impl User {
+    const LEN: usize = 8 * 6;
 }
 
 impl Jackpot {
