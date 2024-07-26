@@ -325,6 +325,10 @@ fn update_leaderboard(leaderboard: &mut Account<Leaderboard>, user: Pubkey, poin
     // Sort the leaderboard by points in descending order and keep only the top 100
     leaderboard.users.sort_by(|a, b| b.points.cmp(&a.points));
     leaderboard.users.truncate(100);
+
+    // Log the specific user and their points
+    msg!("Leaderboard: User: {}, Points: {}", user.to_string(), points);
+
 }
 
 #[derive(Accounts)]
