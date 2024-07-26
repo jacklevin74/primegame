@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leaderboard</title>
+    <title>Prime Miner</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -13,9 +13,16 @@
             margin: 0;
             padding: 0;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
             height: 100vh;
+        }
+
+        .title {
+            margin-top: 20px;
+            font-size: 36px;
+            font-weight: bold;
+            color: #f8f8f2;
         }
 
         .leaderboard {
@@ -24,6 +31,7 @@
             background-color: #44475a;
             border-radius: 8px;
             overflow: hidden;
+            margin-top: 20px;
         }
 
         .leaderboard-header {
@@ -60,17 +68,46 @@
         .leaderboard-points {
             color: #50fa7b;
         }
+
+        .history-section {
+            width: 80%;
+            max-width: 750px;
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            margin-top: 20px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .history-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #f8f8f2;
+            margin-bottom: 10px;
+        }
+
+        .history-entry {
+            font-size: 12px;
+            color: #50fa7b;
+        }
     </style>
 </head>
 <body>
+    <div class="title">Prime Miner</div>
     <div class="leaderboard">
         <div class="leaderboard-header">
             <span>Leaderboard</span>
-            <span id="treasuryBalance">Treasury: 0 SOL</span>
+            <span id="stakingTreasuryBalance">Treasury: 0.00 SOL</span>
         </div>
         <ul class="leaderboard-list" id="leaderboardList">
             <!-- Leaderboard entries will be inserted here -->
         </ul>
+    </div>
+    <div class="history-section">
+        <div class="history-title">History</div>
+        <div id="historyList">
+            <!-- History entries will be inserted here -->
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -78,12 +115,14 @@
         const socket = io();
 
         socket.on('updateLeaderboard', (data) => {
-            const { leaderboard, treasuryBalance } = data;
+            const { leaderboard, stakingTreasuryBalance, history } = data;
 
             const leaderboardList = document.getElementById('leaderboardList');
-            const treasuryBalanceElement = document.getElementById('treasuryBalance');
+            const stakingTreasuryBalanceElement = document.getElementById('stakingTreasuryBalance');
+            const historyList = document.getElementById('historyList');
 
             leaderboardList.innerHTML = ''; // Clear the list
+            historyList.innerHTML = ''; // Clear the history
 
             leaderboard.forEach(entry => {
                 const li = document.createElement('li');
@@ -91,7 +130,15 @@
                 leaderboardList.appendChild(li);
             });
 
-            treasuryBalanceElement.textContent = `Treasury: ${(treasuryBalance / 1000000000).toFixed(2)} SOL`; // Convert lamports to SOL and format
+            stakingTreasuryBalanceElement.textContent = `Treasury: ${(stakingTreasuryBalance / 1000000000).toFixed(2)} SOL`;
+
+            const uniqueHistory = [...new Map(history.map(item => [item.user, item])).values()];
+            uniqueHistory.forEach(entry => {
+                const div = document.createElement('div');
+                div.classList.add('history-entry');
+                div.innerHTML = `User ${entry.user} just won ${entry.sol} SOL with ${entry.powerUp} Power-up`;
+                historyList.appendChild(div);
+            });
         });
     </script>
 </body>

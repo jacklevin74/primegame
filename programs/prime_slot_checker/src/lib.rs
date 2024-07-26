@@ -311,7 +311,7 @@ fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, numb
     **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
 
     msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
-    msg!("Winner: User: {} SOL: {} Power-up: {}", payer_pubkey, transfer_amount/1000000000, power_up);
+    msg!("Winner: User: {} Lamports: {} Power-up: {}", payer_pubkey, transfer_amount, power_up);
     Ok(())
 }
 

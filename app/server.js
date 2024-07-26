@@ -5,7 +5,8 @@ const { Server } = require('socket.io');
 
 // Data storage for users and points
 let leaderboard = [];
-let treasuryBalance = 0; // To store the treasury balance
+let stakingTreasuryBalance = 0; // To store the staking treasury balance
+let history = []; // To store the winner history
 
 // Function to update leaderboard
 function updateLeaderboard(user, points) {
@@ -20,6 +21,18 @@ function updateLeaderboard(user, points) {
 
     // Keep only the top 100 users
     leaderboard = leaderboard.slice(0, 100);
+}
+
+// Function to update history and ensure unique entries
+function updateHistory(user, sol, powerUp) {
+    // Remove the user if they are already in the history
+    history = history.filter(entry => entry.user !== user);
+
+    // Add the new entry
+    history.unshift({ user, sol, powerUp });
+
+    // Keep only the last 3 unique entries
+    history = history.slice(0, 3);
 }
 
 // Connect to Solana and listen for Leaderboard events
@@ -64,13 +77,26 @@ async function connectToSolana() {
                         const points = parseInt(pointsMatch[1], 10);
 
                         updateLeaderboard(user, points);
-                        io.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Emit updated leaderboard to clients
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, history }); // Emit updated leaderboard to clients
+                        console.log(`Leaderboard: User: ${user}, Points: ${points}`);
                     }
                 } else if (log.includes("Treasury balance:")) {
                     const balanceMatch = log.match(/Treasury balance:\s(\d+)/);
                     if (balanceMatch) {
-                        treasuryBalance = parseInt(balanceMatch[1], 10);
-                        io.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Emit updated leaderboard with balance to clients
+                        stakingTreasuryBalance = parseInt(balanceMatch[1], 10);
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, history }); // Emit updated leaderboard with balance to clients
+                        console.log(`Treasury balance: ${(stakingTreasuryBalance / 1000000000).toFixed(2)} SOL`);
+                    }
+                } else if (log.includes("Winner:")) {
+                    const winnerMatch = log.match(/Winner: User:\s([A-Za-z0-9]+)\sLamports:\s(\d+)\sPower-up:\s([\d\.]+)/);
+                    if (winnerMatch) {
+                        const user = winnerMatch[1];
+                        const lamports = parseInt(winnerMatch[2], 10);
+                        const sol = (lamports / 1000000000).toFixed(2); // Convert lamports to SOL and format to two decimal places
+                        const powerUp = parseFloat(winnerMatch[3]);
+                        updateHistory(user, sol, powerUp);
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, history }); // Emit updated leaderboard with history to clients
+                        console.log(`Winner: User: ${user}, SOL: ${sol}, Power-up: ${powerUp}`);
                     }
                 }
             });
@@ -102,7 +128,7 @@ app.get('/', (req, res) => {
 // Socket.io connection
 io.on('connection', (socket) => {
     console.log('New client connected');
-    socket.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Send the initial leaderboard to the client
+    socket.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, history }); // Send the initial leaderboard to the client
     socket.on('disconnect', () => {
         console.log('Client disconnected');
     });
