@@ -5,13 +5,13 @@ const { Server } = require('socket.io');
 
 // Data storage for users and points
 let leaderboard = [];
-let stakingTreasuryBalance = 0; // To store the staking treasury balance
+let treasuryBalance = 0; // To store the treasury balance
 
 // Function to update leaderboard
 function updateLeaderboard(user, points) {
     // Remove the user if they are already in the leaderboard
     leaderboard = leaderboard.filter(entry => entry.user !== user);
-    
+
     // Add the user back with updated points
     leaderboard.push({ user, points });
 
@@ -64,13 +64,13 @@ async function connectToSolana() {
                         const points = parseInt(pointsMatch[1], 10);
 
                         updateLeaderboard(user, points);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance }); // Emit updated leaderboard to clients
+                        io.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Emit updated leaderboard to clients
                     }
-                } else if (log.includes("Staking Treasury Balance:")) {
-                    const balanceMatch = log.match(/Staking Treasury Balance:\s(\d+)\s/);
+                } else if (log.includes("Treasury balance:")) {
+                    const balanceMatch = log.match(/Treasury balance:\s(\d+)/);
                     if (balanceMatch) {
-                        stakingTreasuryBalance = parseInt(balanceMatch[1], 10);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance }); // Emit updated leaderboard with balance to clients
+                        treasuryBalance = parseInt(balanceMatch[1], 10);
+                        io.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Emit updated leaderboard with balance to clients
                     }
                 }
             });
@@ -102,7 +102,7 @@ app.get('/', (req, res) => {
 // Socket.io connection
 io.on('connection', (socket) => {
     console.log('New client connected');
-    socket.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance }); // Send the initial leaderboard to the client
+    socket.emit('updateLeaderboard', { leaderboard, treasuryBalance }); // Send the initial leaderboard to the client
     socket.on('disconnect', () => {
         console.log('Client disconnected');
     });

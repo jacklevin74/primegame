@@ -66,7 +66,7 @@
     <div class="leaderboard">
         <div class="leaderboard-header">
             <span>Leaderboard</span>
-            <span id="stakingTreasuryBalance">Staking Treasury: 0 SOL</span>
+            <span id="treasuryBalance">Treasury: 0 SOL</span>
         </div>
         <ul class="leaderboard-list" id="leaderboardList">
             <!-- Leaderboard entries will be inserted here -->
@@ -78,10 +78,10 @@
         const socket = io();
 
         socket.on('updateLeaderboard', (data) => {
-            const { leaderboard, stakingTreasuryBalance } = data;
+            const { leaderboard, treasuryBalance } = data;
 
             const leaderboardList = document.getElementById('leaderboardList');
-            const stakingTreasuryBalanceElement = document.getElementById('stakingTreasuryBalance');
+            const treasuryBalanceElement = document.getElementById('treasuryBalance');
 
             leaderboardList.innerHTML = ''; // Clear the list
 
@@ -91,7 +91,7 @@
                 leaderboardList.appendChild(li);
             });
 
-            stakingTreasuryBalanceElement.textContent = `Staking Treasury: ${stakingTreasuryBalance / 1000000000} SOL`; // Convert lamports to SOL
+            treasuryBalanceElement.textContent = `Treasury: ${(treasuryBalance / 1000000000).toFixed(2)} SOL`; // Convert lamports to SOL and format
         });
     </script>
 </body>

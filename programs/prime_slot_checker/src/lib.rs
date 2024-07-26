@@ -79,6 +79,7 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let jackpot = &mut ctx.accounts.jackpot;
@@ -173,6 +174,10 @@ pub mod prime_slot_checker {
         msg!("Jackpot pool now has {} points.", jackpot.amount);
         msg!("User {} has {} won points.", payer.key(), user.won_points);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
+
+        // Read and print the balance of the treasury
+        let treasury_balance = **treasury.to_account_info().lamports.borrow();
+        msg!("Treasury balance: {}", treasury_balance);
 
         Ok(())
     }
@@ -293,6 +298,7 @@ fn transfer_from_staking_treasury(
 fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
     let treasury_balance = **treasury.to_account_info().lamports.borrow();
     let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
+    let payer_pubkey = payer.key();
 
     // Calculate the amount to transfer based on the prime number ending and power-up
     let transfer_amount = if number_to_test % 100 == 1 {
@@ -305,6 +311,7 @@ fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, numb
     **payer.to_account_info().lamports.borrow_mut() += transfer_amount;
 
     msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
+    msg!("Winner: User: {} SOL: {} Power-up: {}", payer_pubkey, transfer_amount/1000000000, power_up);
     Ok(())
 }
 
