@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = [ "math_utils",
     "programs/*"
 ]
 resolver = "2"

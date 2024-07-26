@@ -20,3 +20,4 @@ init_if_needed = ["anchor-lang/init-if-needed"]
 [dependencies]
 anchor-lang = { version = "0.30.1", features = ["init-if-needed"] }
 solana-program = "1.18.12"
+math_utils = { path = "../../math_utils" }
