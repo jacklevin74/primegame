@@ -7,7 +7,7 @@
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",
     "@project-serum/anchor": "^0.26.0",
-    "@solana/web3.js": "^1.95.1",
+    "@solana/web3.js": "^1.95.2",
     "child_process": "^1.0.2",
     "fs": "^0.0.1-security",
     "tsx": "^4.16.2"

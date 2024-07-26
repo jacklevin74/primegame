@@ -124,7 +124,7 @@ pub mod prime_slot_checker {
 
         // Calculate the number to test
         let number_to_test = slot + user_number as u64 + recent_players_sum + time_number;
-
+            
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
             let reward_points = (jackpot.amount as f64 * power_up) as i64;
@@ -137,6 +137,15 @@ pub mod prime_slot_checker {
 
             transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
             msg!("User won with {} power-up", power_up);
+        
+           //send event
+           msg!("PrimeFound: slot={}, user_pubkey={}, power_up={}, number_to_test={}, reward_points={}",
+              slot,
+              user_pubkey,
+              power_up,
+              number_to_test,
+              reward_points
+          );
 
             // Adjust jackpot amount to ensure it doesn't go below zero
             if jackpot.amount >= reward_points {
@@ -150,6 +159,7 @@ pub mod prime_slot_checker {
             user.points -= 10;
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is not prime. Jackpot pool increased by 10 points.", slot, user_number, recent_players_sum, time_number, number_to_test);
         }
+        
 
         // Update the player list with the latest user
         update_player_list(player_list, payer.key());
@@ -161,6 +171,7 @@ pub mod prime_slot_checker {
         msg!("Jackpot pool now has {} points.", jackpot.amount);
         msg!("User {} has {} won points.", payer.key(), user.won_points);
         msg!("Jackpot winner is now: {:?}", jackpot.winner);
+
         Ok(())
     }
 
@@ -476,6 +487,16 @@ impl StakingTreasury {
     const LEN: usize = 8; // Discriminator
 }
 
+#[event]
+pub struct PrimeFound {
+    pub slot: u64,
+    pub user_pubkey: Pubkey,
+    pub power_up: f64,
+    pub number_to_test: u64,
+    pub reward_points: i64,
+}
+
+
 // Convert a public key to a number in the range of 1 to 100,000
 fn pubkey_to_number(pubkey: &Pubkey) -> u32 {
     let mut number: u32 = 0;
@@ -549,4 +570,3 @@ fn mod_exp(mut base: u64, mut exp: u64, modulus: u64) -> u64 {
     }
     result
 }
-
