@@ -221,25 +221,10 @@ pub mod prime_slot_checker {
         // Add points to user
         user.points += 1000;
         msg!("User {} paid 1 SOL and received 1000 points.", payer.key());
+        msg!("Buy Points: Yield Pool {}",  **staking_treasury.to_account_info().lamports.borrow());
 
         Ok(())
     }
-/*
-    pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
-        let user = &ctx.accounts.user;
-        let total_won_points = &ctx.accounts.total_won_points;
-
-        let ratio = user.won_points as f64 / total_won_points.points as f64;
-        msg!("User ratio: {}", ratio);
-        msg!("User last claimed slot: {}", user.last_claimed_slot);
-        msg!("User last claimed lamports: {}", user.last_claimed_lamports);
-
-        // Additional logic for claiming lamports will go here.
-
-        Ok(())
-    }
-}
-*/
 
 pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
     let user = &mut ctx.accounts.user;
@@ -257,14 +242,14 @@ pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
     let current_slot = Clock::get()?.slot;
 
     // Transfer lamports from staking treasury to the payer
-    let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
+    // let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
 
     // Update user's last claimed slot and last claimed lamports
     user.last_claimed_slot = current_slot;
-    user.last_claimed_lamports = lamports_transferred;
+    //user.last_claimed_lamports = lamports_transferred;
 
     msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
-    msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
+    //msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
 
     Ok(())
     }
