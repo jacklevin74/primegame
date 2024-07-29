@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 let leaderboard = [];
 let stakingTreasuryBalance = 0; // To store the staking treasury balance
 let yieldPoolBalance = 0; // To store the yield pool balance
+let jackpotPoolBalance = 0; // To store the jackpot pool balance
 let history = []; // To store the winner history
 
 // Function to update leaderboard
@@ -32,7 +33,7 @@ function updateHistory(user, sol, powerUp) {
     // Add the new entry
     history.unshift({ user, sol, powerUp });
 
-    // Keep only the last 3 unique entries
+    // Keep only the last 10 unique entries
     history = history.slice(0, 10);
 }
 
@@ -78,22 +79,29 @@ async function connectToSolana() {
                         const points = parseInt(pointsMatch[1], 10);
 
                         updateLeaderboard(user, points);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, history }); // Emit updated leaderboard to clients
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Emit updated leaderboard to clients
                         console.log(`Leaderboard: User: ${user}, Points: ${points}`);
                     }
                 } else if (log.includes("Treasury balance:")) {
                     const balanceMatch = log.match(/Treasury balance:\s(\d+)/);
                     if (balanceMatch) {
                         stakingTreasuryBalance = parseInt(balanceMatch[1], 10);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, history }); // Emit updated leaderboard with balance to clients
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Emit updated leaderboard with balance to clients
                         console.log(`Treasury balance: ${(stakingTreasuryBalance / 1000000000).toFixed(2)} SOL`);
                     }
                 } else if (log.includes("Buy Points: Yield Pool")) {
                     const yieldPoolMatch = log.match(/Buy Points: Yield Pool (\d+)/);
                     if (yieldPoolMatch) {
                         yieldPoolBalance = parseInt(yieldPoolMatch[1], 10);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, history }); // Emit updated leaderboard with yield pool balance to clients
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Emit updated leaderboard with yield pool balance to clients
                         console.log(`Yield Pool balance: ${(yieldPoolBalance / 1000000000).toFixed(2)} SOL`);
+                    }
+                } else if (log.includes("Jackpot pool now has")) {
+                    const jackpotMatch = log.match(/Jackpot pool now has (\d+) points/);
+                    if (jackpotMatch) {
+                        jackpotPoolBalance = parseInt(jackpotMatch[1], 10);
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Emit updated leaderboard with jackpot pool balance to clients
+                        console.log(`Jackpot pool: ${jackpotPoolBalance} points`);
                     }
                 } else if (log.includes("Winner:")) {
                     const winnerMatch = log.match(/Winner: User:\s([A-Za-z0-9]+)\sLamports:\s(\d+)\sPower-up:\s([\d\.]+)/);
@@ -103,7 +111,7 @@ async function connectToSolana() {
                         const sol = (lamports / 1000000000).toFixed(2); // Convert lamports to SOL and format to two decimal places
                         const powerUp = parseFloat(winnerMatch[3]);
                         updateHistory(user, sol, powerUp);
-                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, history }); // Emit updated leaderboard with history to clients
+                        io.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Emit updated leaderboard with history to clients
                         console.log(`Winner: User: ${user}, SOL: ${sol}, Power-up: ${powerUp}`);
                     }
                 }
@@ -136,7 +144,7 @@ app.get('/', (req, res) => {
 // Socket.io connection
 io.on('connection', (socket) => {
     console.log('New client connected');
-    socket.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, history }); // Send the initial leaderboard to the client
+    socket.emit('updateLeaderboard', { leaderboard, stakingTreasuryBalance, yieldPoolBalance, jackpotPoolBalance, history }); // Send the initial leaderboard to the client
     socket.on('disconnect', () => {
         console.log('Client disconnected');
     });
