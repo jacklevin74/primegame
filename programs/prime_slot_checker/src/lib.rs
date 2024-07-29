@@ -5,6 +5,7 @@ use math_utils::{is_prime};
 declare_id!("B4FMCpibTGdZhxHHNgWWnwk5PhhKdST37uFRY6TVksaj");
 
 #[program]
+#[allow(dead_code)]
 pub mod prime_slot_checker {
     use super::*;
 
@@ -79,6 +80,7 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let jackpot = &mut ctx.accounts.jackpot;
@@ -87,6 +89,8 @@ pub mod prime_slot_checker {
         let player_list = &mut ctx.accounts.player_list;
         let leaderboard = &mut ctx.accounts.leaderboard;
         let total_won_points = &mut ctx.accounts.total_won_points;
+        let rate = &mut ctx.accounts.rate;
+        let staking_treasury = &ctx.accounts.staking_treasury;
 
         // Prevent transaction if user points are 0 or less
         if user.points <= 0 {
@@ -140,14 +144,17 @@ pub mod prime_slot_checker {
             transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
             msg!("User won with {} power-up", power_up);
 
-           //send event
-           msg!("PrimeFound: slot={}, user_pubkey={}, power_up={}, number_to_test={}, reward_points={}",
-              slot,
-              payer_pubkey,
-              power_up,
-              number_to_test,
-              reward_points
-          );
+            // Send event
+            msg!("PrimeFound: slot={}, user_pubkey={}, power_up={}, number_to_test={}, reward_points={}",
+                slot,
+                payer_pubkey,
+                power_up,
+                number_to_test,
+                reward_points
+            );
+
+            // Calculate the new point rate after winning
+            calculate_point_rate_internal(staking_treasury, total_won_points, rate)?;
 
             // Adjust jackpot amount to ensure it doesn't go below zero
             if jackpot.amount >= reward_points {
@@ -224,52 +231,54 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
-pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
-    let user = &mut ctx.accounts.user;
-    let total_won_points = &ctx.accounts.total_won_points;
-    let staking_treasury = &mut ctx.accounts.staking_treasury;
-    let payer = &ctx.accounts.payer;
-
-    // Calculate the ratio of user's won points to total won points
-    let ratio = user.won_points as f64 / total_won_points.points as f64;
-    msg!("User ratio: {}", ratio);
-    msg!("User last claimed slot: {}", user.last_claimed_slot);
-    msg!("User last claimed lamports: {}", user.last_claimed_lamports);
-
-    // Get the current slot
-    let current_slot = Clock::get()?.slot;
-
-    // Transfer lamports from staking treasury to the payer
-    // let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
-
-    // Update user's last claimed slot and last claimed lamports
-    user.last_claimed_slot = current_slot;
-    //user.last_claimed_lamports = lamports_transferred;
-
-    msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
-    //msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
-
-    Ok(())
-    }
-
-    pub fn calculate_point_rate(ctx: Context<CalculatePointRate>) -> Result<f64> {
-        let staking_treasury = &ctx.accounts.staking_treasury;
+    pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
+        let user = &mut ctx.accounts.user;
         let total_won_points = &ctx.accounts.total_won_points;
+        let _staking_treasury = &mut ctx.accounts.staking_treasury;
+        let _payer = &ctx.accounts.payer;
 
-        let staking_treasury_balance = **staking_treasury.to_account_info().lamports.borrow() as f64;
-        let total_points = total_won_points.points as f64;
+        // Calculate the ratio of user's won points to total won points
+        let ratio = user.won_points as f64 / total_won_points.points as f64;
+        msg!("User ratio: {}", ratio);
+        msg!("User last claimed slot: {}", user.last_claimed_slot);
+        msg!("User last claimed lamports: {}", user.last_claimed_lamports);
 
-        if total_points == 0.0 {
-            return Ok(0.0);
-        }
+        // Get the current slot
+        let current_slot = Clock::get()?.slot;
 
-        let point_rate = staking_treasury_balance / total_points;
-        msg!("Point rate: {} lamports per point", point_rate);
-        
-        Ok(point_rate)
+        // Transfer lamports from staking treasury to the payer
+        // let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
+
+        // Update user's last claimed slot and last claimed lamports
+        user.last_claimed_slot = current_slot;
+        //user.last_claimed_lamports = lamports_transferred;
+
+        msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
+        //msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
+
+        Ok(())
     }
 }
 
+fn calculate_point_rate_internal(
+    staking_treasury: &Account<StakingTreasury>,
+    total_won_points: &Account<TotalWonPoints>,
+    rate: &mut Account<Rate>,
+) -> Result<()> {
+    let staking_treasury_balance = **staking_treasury.to_account_info().lamports.borrow() as f64;
+    let total_points = total_won_points.points as f64;
+
+    if total_points == 0.0 {
+        rate.value = 0.0;
+    } else {
+        rate.value = staking_treasury_balance / total_points;
+    }
+
+    msg!("Point rate: {} lamports per point", rate.value);
+    Ok(())
+}
+
+/*
 fn transfer_from_staking_treasury(
     staking_treasury: &mut Account<StakingTreasury>,
     payer: &Signer,
@@ -292,6 +301,7 @@ fn transfer_from_staking_treasury(
     msg!("Transferred {} lamports from staking treasury {} to user {}", transfer_amount, staking_treasury.key(), payer.key());
     Ok(transfer_amount)
 }
+*/
 
 fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
     let treasury_balance = **treasury.to_account_info().lamports.borrow();
@@ -349,7 +359,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-pub struct InitializeTotalWonPoints <'info> {
+pub struct InitializeTotalWonPoints<'info> {
     #[account(init_if_needed, payer = payer, space = TotalWonPoints::LEN, seeds = [b"total_won_points"], bump)]
     pub total_won_points: Box<Account<'info, TotalWonPoints>>,
     #[account(mut)]
@@ -385,6 +395,15 @@ pub struct InitializeUser<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeRate<'info> {
+    #[account(init_if_needed, payer = payer, space = Rate::LEN, seeds = [b"rate"], bump)]
+    pub rate: Box<Account<'info, Rate>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct CheckSlot<'info> {
     #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
     pub user: Box<Account<'info, User>>,
@@ -398,6 +417,10 @@ pub struct CheckSlot<'info> {
     pub player_list: Box<Account<'info, PlayerList>>,
     #[account(mut, seeds = [b"leaderboard"], bump)]
     pub leaderboard: Box<Account<'info, Leaderboard>>,
+    #[account(mut, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
+    #[account(mut, seeds = [b"rate"], bump)]
+    pub rate: Box<Account<'info, Rate>>,
     pub payer: Signer<'info>,
 }
 
@@ -423,15 +446,6 @@ pub struct ClaimLamports<'info> {
     pub staking_treasury: Box<Account<'info, StakingTreasury>>,
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct CalculatePointRate<'info> {
-    #[account(mut, seeds = [b"staking_treasury"], bump)]
-    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
-    #[account(mut, seeds = [b"total_won_points"], bump)]
-    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
-    pub payer: Signer<'info>,
 }
 
 #[account]
@@ -472,6 +486,11 @@ pub struct Leaderboard {
     pub users: Vec<UserEntry>,
 }
 
+#[account]
+pub struct Rate {
+    pub value: f64,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct UserEntry {
     pub user: Pubkey,
@@ -500,6 +519,10 @@ impl Treasury {
 
 impl Leaderboard {
     const LEN: usize = 8 + (32 + 8) * 100; // Discriminator + 100 UserEntry
+}
+
+impl Rate {
+    const LEN: usize = 8 + 8; // Discriminator + rate value
 }
 
 impl StakingTreasury {

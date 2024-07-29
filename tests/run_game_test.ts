@@ -27,6 +27,8 @@ describe('prime_slot_checker', () => {
   let playerListBump: number;
   let leaderboardPda: PublicKey;
   let leaderboardBump: number;
+  let ratePda: PublicKey;
+  let rateBump: number;
 
   before(async () => {
     [jackpotPda, jackpotBump] = await PublicKey.findProgramAddress(
@@ -59,12 +61,18 @@ describe('prime_slot_checker', () => {
       program.programId
     );
 
+    [ratePda, rateBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("rate")],
+      program.programId
+    );
+
     await program.account.jackpot.fetch(jackpotPda);
     await program.account.treasury.fetch(treasuryPda);
     await program.account.stakingTreasury.fetch(stakingTreasuryPda);
     await program.account.totalWonPoints.fetch(totalWonPointsPda);
     await program.account.playerList.fetch(playerListPda);
     await program.account.leaderboard.fetch(leaderboardPda);
+    await program.account.rate.fetch(ratePda);
   });
 
   it('Play against current slot until jackpot is 0', async () => {
@@ -101,6 +109,7 @@ describe('prime_slot_checker', () => {
             totalWonPoints: totalWonPointsPda,
             playerList: playerListPda,
             leaderboard: leaderboardPda,
+            rate: ratePda,
             payer: provider.wallet.publicKey,
           })
           .rpc();
@@ -114,6 +123,7 @@ describe('prime_slot_checker', () => {
         jackpotAccount = await program.account.jackpot.fetch(jackpotPda);
         userAccount = await program.account.user.fetch(userPda);
         const totalWonPointsAccount = await program.account.totalWonPoints.fetch(totalWonPointsPda);
+        const rateAccount = await program.account.rate.fetch(ratePda);
         const payerBalance = await provider.connection.getBalance(provider.wallet.publicKey);
         const treasuryBalance = await provider.connection.getBalance(treasuryPda);
         const stakingTreasuryBalance = await provider.connection.getBalance(stakingTreasuryPda);
@@ -122,6 +132,7 @@ describe('prime_slot_checker', () => {
         console.log('Updated User Points:', userAccount.points.toNumber());
         console.log('Updated User Won Points:', userAccount.wonPoints ? userAccount.wonPoints.toNumber() : 0);
         console.log('Updated Total Won Points:', totalWonPointsAccount.points.toNumber());
+        console.log('Updated Rate:', rateAccount.value);
         console.log('Jackpot Winner Pubkey:', jackpotAccount.winner.toBase58());
         console.log('Payer Balance:', payerBalance / 1000000000 + " SOL");
         console.log('Treasury Balance:', treasuryBalance / 1000000000 + " SOL");
