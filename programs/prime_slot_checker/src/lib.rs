@@ -79,7 +79,6 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
-
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let jackpot = &mut ctx.accounts.jackpot;
@@ -127,7 +126,7 @@ pub mod prime_slot_checker {
 
         // Calculate the number to test
         let number_to_test = slot + user_number as u64 + recent_players_sum + time_number;
-            
+
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
             let reward_points = (jackpot.amount as f64 * power_up) as i64;
@@ -140,7 +139,7 @@ pub mod prime_slot_checker {
 
             transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
             msg!("User won with {} power-up", power_up);
-        
+
            //send event
            msg!("PrimeFound: slot={}, user_pubkey={}, power_up={}, number_to_test={}, reward_points={}",
               slot,
@@ -162,7 +161,6 @@ pub mod prime_slot_checker {
             user.points -= 10;
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is not prime. Jackpot pool increased by 10 points.", slot, user_number, recent_players_sum, time_number, number_to_test);
         }
-        
 
         // Update the player list with the latest user
         update_player_list(player_list, payer.key());
@@ -253,9 +251,24 @@ pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
 
     Ok(())
     }
+
+    pub fn calculate_point_rate(ctx: Context<CalculatePointRate>) -> Result<f64> {
+        let staking_treasury = &ctx.accounts.staking_treasury;
+        let total_won_points = &ctx.accounts.total_won_points;
+
+        let staking_treasury_balance = **staking_treasury.to_account_info().lamports.borrow() as f64;
+        let total_points = total_won_points.points as f64;
+
+        if total_points == 0.0 {
+            return Ok(0.0);
+        }
+
+        let point_rate = staking_treasury_balance / total_points;
+        msg!("Point rate: {} lamports per point", point_rate);
+        
+        Ok(point_rate)
+    }
 }
-
-
 
 fn transfer_from_staking_treasury(
     staking_treasury: &mut Account<StakingTreasury>,
@@ -320,7 +333,6 @@ fn update_leaderboard(leaderboard: &mut Account<Leaderboard>, user: Pubkey, poin
 
     // Log the specific user and their points
     msg!("Leaderboard: User: {}, Points: {}", user.to_string(), points);
-
 }
 
 #[derive(Accounts)]
@@ -413,6 +425,15 @@ pub struct ClaimLamports<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct CalculatePointRate<'info> {
+    #[account(mut, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
+    #[account(mut, seeds = [b"total_won_points"], bump)]
+    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
+    pub payer: Signer<'info>,
+}
+
 #[account]
 pub struct User {
     pub points: i64,
@@ -493,7 +514,6 @@ pub struct PrimeFound {
     pub number_to_test: u64,
     pub reward_points: i64,
 }
-
 
 // Convert a public key to a number in the range of 1 to 100,000
 fn pubkey_to_number(pubkey: &Pubkey) -> u32 {
