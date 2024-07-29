@@ -187,6 +187,40 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+    pub fn trade_won_points(ctx: Context<TradeWonPoints>, _bump: u8) -> Result<()> {
+        let user = &mut ctx.accounts.user;
+        let rate = &ctx.accounts.rate;
+        let staking_treasury = &mut ctx.accounts.staking_treasury;
+        let payer = &ctx.accounts.payer;
+
+        // Check if user has at least 1000 won points
+        if user.won_points < 1000 {
+            return Err(ProgramError::InsufficientFunds.into());
+        }
+
+        // Calculate the lamports to transfer
+        let lamports_to_transfer = (1000.0 * rate.value) as u64;
+
+        // Check if staking treasury has enough lamports
+        let staking_treasury_balance = **staking_treasury.to_account_info().lamports.borrow();
+        if staking_treasury_balance < lamports_to_transfer {
+            return Err(ProgramError::InsufficientFunds.into());
+        }
+
+        // Transfer lamports from staking treasury to payer
+        **staking_treasury.to_account_info().lamports.borrow_mut() -= lamports_to_transfer;
+        **payer.to_account_info().lamports.borrow_mut() += lamports_to_transfer;
+
+        // Deduct 1000 won points from user
+        user.won_points -= 1000;
+
+        msg!("Traded 1000 won points for {} lamports", lamports_to_transfer);
+        msg!("User {} now has {} won points", payer.key(), user.won_points);
+
+        Ok(())
+    }
+
+
     pub fn pay_for_points(ctx: Context<PayForPoints>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
         let treasury = &mut ctx.accounts.treasury;
@@ -447,6 +481,19 @@ pub struct ClaimLamports<'info> {
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
+
+#[derive(Accounts)]
+pub struct TradeWonPoints<'info> {
+    #[account(mut, seeds = [b"user", payer.key().as_ref()], bump)]
+    pub user: Box<Account<'info, User>>,
+    #[account(mut, seeds = [b"rate"], bump)]
+    pub rate: Box<Account<'info, Rate>>,
+    #[account(mut, seeds = [b"staking_treasury"], bump)]
+    pub staking_treasury: Box<Account<'info, StakingTreasury>>,
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 
 #[account]
 pub struct User {
