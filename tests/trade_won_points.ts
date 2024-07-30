@@ -71,6 +71,7 @@ describe('prime_slot_checker', () => {
 
   it('Trade won points for lamports', async () => {
     let userAccount;
+    let totalWonPoints;
 
     try {
       [userPda, userBump] = await PublicKey.findProgramAddress(
@@ -105,6 +106,7 @@ describe('prime_slot_checker', () => {
 
     try {
       userAccount = await program.account.user.fetch(userPda);
+      totalWonPoints = await program.account.totalWonPoints.fetch(totalWonPointsPda);
       const rateAccount = await program.account.rate.fetch(ratePda);
       const payerBalance = await provider.connection.getBalance(provider.wallet.publicKey);
       const stakingTreasuryBalance = await provider.connection.getBalance(stakingTreasuryPda);
@@ -113,6 +115,7 @@ describe('prime_slot_checker', () => {
       console.log('Updated Rate:', rateAccount.value);
       console.log('Payer Balance:', payerBalance / 1000000000 + " SOL");
       console.log('Staking Treasury Balance:', stakingTreasuryBalance / 1000000000 + " SOL");
+      console.log('Total Won Points:', totalWonPoints.points.toNumber());
     } catch (err) {
       console.error("Fetch Error after trade:", err);
       console.error("Problematic Accounts:");

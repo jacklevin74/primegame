@@ -192,6 +192,7 @@ pub mod prime_slot_checker {
         let rate = &ctx.accounts.rate;
         let staking_treasury = &mut ctx.accounts.staking_treasury;
         let payer = &ctx.accounts.payer;
+        let total_won_points = &mut ctx.accounts.total_won_points;
 
         // Check if user has at least 1000 won points
         if user.won_points < 1000 {
@@ -213,6 +214,7 @@ pub mod prime_slot_checker {
 
         // Deduct 1000 won points from user
         user.won_points -= 1000;
+        total_won_points.points -= 1000;
 
         msg!("Traded 1000 won points for {} lamports", lamports_to_transfer);
         msg!("User {} now has {} won points", payer.key(), user.won_points);
@@ -488,6 +490,8 @@ pub struct TradeWonPoints<'info> {
     pub user: Box<Account<'info, User>>,
     #[account(mut, seeds = [b"rate"], bump)]
     pub rate: Box<Account<'info, Rate>>,
+    #[account(mut, seeds = [b"total_won_points"], bump)]
+    pub total_won_points: Box<Account<'info, TotalWonPoints>>,
     #[account(mut, seeds = [b"staking_treasury"], bump)]
     pub staking_treasury: Box<Account<'info, StakingTreasury>>,
     pub payer: Signer<'info>,
