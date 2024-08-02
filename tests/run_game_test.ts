@@ -1,5 +1,6 @@
 import * as anchor from '@coral-xyz/anchor';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
+import { ComputeBudgetProgram } from "@solana/web3.js";
 
 // Function to add delay using a simple loop
 function sleep(ms: number) {
@@ -111,8 +112,7 @@ describe('prime_slot_checker', () => {
             leaderboard: leaderboardPda,
             rate: ratePda,
             payer: provider.wallet.publicKey,
-          })
-          .rpc();
+          }).preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 300000 }),]).rpc();
 
         console.log("\nTransaction signature:", tx);
       } catch (err) {
