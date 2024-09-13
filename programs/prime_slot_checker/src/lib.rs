@@ -93,7 +93,7 @@ pub mod prime_slot_checker {
         let staking_treasury = &ctx.accounts.staking_treasury;
 
         // Prevent transaction if user points are 0 or less
-        if user.points <= 0 {
+        if user.points <= 10 {
             return Err(ProgramError::InsufficientFunds.into());
         }
 
@@ -134,6 +134,7 @@ pub mod prime_slot_checker {
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
             let reward_points = (jackpot.amount as f64 * power_up) as i64;
+            user.points -= 10;
             user.points += reward_points;
             user.won_points += reward_points;
             total_won_points.points += reward_points as u64;
@@ -173,7 +174,7 @@ pub mod prime_slot_checker {
         update_player_list(player_list, payer.key());
 
         // Log the last 10 user public keys
-        update_leaderboard(leaderboard, payer.key(), user.won_points);
+        // update_leaderboard(leaderboard, payer.key(), user.won_points);
 
         msg!("User {} now has {} points.", payer.key(), user.points);
         msg!("Jackpot pool now has {} points.", jackpot.amount);
