@@ -38,6 +38,13 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+    pub fn initialize_total_won_tokens(ctx: Context<InitializeTotalWonTokens>) -> Result<()> {
+        let total_won_tokens = &ctx.accounts.total_won_tokens;
+        msg!("TotalWonTokens account initialized {}", total_won_tokens.key());
+        Ok(())
+    }
+
+
     pub fn initialize_staking_treasury(ctx: Context<InitializeStakingTreasury>) -> Result<()> {
         let staking_treasury = &ctx.accounts.staking_treasury;
         msg!("Staking Treasury account initialized {}", staking_treasury.key());
@@ -61,20 +68,21 @@ pub mod prime_slot_checker {
     pub fn initialize_user(ctx: Context<InitializeUser>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
 
-        // Initialize user points only if they have not been initialized already
-        if user.points == 0 && user.won_points == 0 {
+        // Initialize user points and tokens only if they have not been initialized already
+        if user.points == 0 && user.won_points == 0 && user.won_tokens == 0 {
             user.points = 0;
             user.won_points = 0;
+            user.won_tokens = 0;
             user.last_won_slot = 0;
             user.last_claimed_slot = 0;
             user.last_claimed_lamports = 0;
 
-            msg!("User initialized with 0 points and 0 won points.");
+            msg!("User initialized with 0 points, 0 won points, and 0 won tokens.");
         } else if user.points == 0 {
             user.points = 0;
-            msg!("User initialized with 0 points and {} won points.", user.won_points);
+            msg!("User initialized with 0 points, {} won points, and {} won tokens.", user.won_points, user.won_tokens);
         } else {
-            msg!("User already initialized with {} points and {} won points and last won slot {} ", user.points, user.won_points, user.last_won_slot);
+            msg!("User already initialized with {} points, {} won points, {} won tokens, and last won slot {} ", user.points, user.won_points, user.won_tokens, user.last_won_slot);
         }
 
         Ok(())
@@ -142,7 +150,11 @@ pub mod prime_slot_checker {
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
 
-            transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
+            let lamports_transferred = transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
+
+            user.won_tokens += lamports_transferred;
+
+            // Convert lamports_transferred to a string for formatting
             msg!("User won with {} power-up", power_up);
 
             // Send event
@@ -218,7 +230,7 @@ pub mod prime_slot_checker {
         total_won_points.points -= 1000;
 
         msg!("Traded 1000 won points for {} lamports", lamports_to_transfer);
-        msg!("User {} now has {} won points", payer.key(), user.won_points);
+        msg!("User {} now has {} won points and {} won tokens", payer.key(), user.won_points, user.won_tokens);
 
         Ok(())
     }
@@ -340,7 +352,7 @@ fn transfer_from_staking_treasury(
 }
 */
 
-fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
+fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<u64> {
     let treasury_balance = **treasury.to_account_info().lamports.borrow();
     let rent_exemption = Rent::get()?.minimum_balance(treasury.to_account_info().data_len());
     let payer_pubkey = payer.key();
@@ -357,7 +369,7 @@ fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, numb
 
     msg!("Transferred {} lamports from treasury {} to user {}", transfer_amount, treasury.key(), payer.key());
     msg!("Winner: User: {} Lamports: {} Power-up: {}", payer_pubkey, transfer_amount, power_up);
-    Ok(())
+    Ok(transfer_amount)
 }
 
 fn update_player_list(player_list: &mut Account<PlayerList>, new_player: Pubkey) {
@@ -399,6 +411,15 @@ pub struct Initialize<'info> {
 pub struct InitializeTotalWonPoints<'info> {
     #[account(init_if_needed, payer = payer, space = TotalWonPoints::LEN, seeds = [b"total_won_points"], bump)]
     pub total_won_points: Box<Account<'info, TotalWonPoints>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeTotalWonTokens<'info> {
+    #[account(init_if_needed, payer = payer, space = TotalWonTokens::LEN, seeds = [b"total_won_tokens"], bump)]
+    pub total_won_tokens: Box<Account<'info, TotalWonTokens>>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -448,6 +469,8 @@ pub struct CheckSlot<'info> {
     pub jackpot: Box<Account<'info, Jackpot>>,
     #[account(mut, seeds = [b"total_won_points"], bump)]
     pub total_won_points: Box<Account<'info, TotalWonPoints>>,
+    #[account(mut, seeds = [b"total_won_tokens"], bump)]
+    pub total_won_tokens: Box<Account<'info, TotalWonTokens>>,
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: Box<Account<'info, Treasury>>,
     #[account(mut, seeds = [b"player_list"], bump)]
@@ -504,6 +527,7 @@ pub struct TradeWonPoints<'info> {
 pub struct User {
     pub points: i64,
     pub won_points: i64,
+    pub won_tokens: u64,
     pub last_won_slot: u64,
     pub last_claimed_slot: u64,
     pub last_claimed_lamports: u64,
@@ -521,6 +545,11 @@ pub struct StakingTreasury {}
 #[account]
 pub struct TotalWonPoints {
     pub points: u64,
+}
+
+#[account]
+pub struct TotalWonTokens {
+    pub tokens: u64,
 }
 
 #[account]
@@ -561,6 +590,10 @@ impl Jackpot {
     const LEN: usize = 8 + 8 + 32; // Discriminator + amount + Pubkey
 }
 
+impl TotalWonTokens {
+    const LEN: usize = 8 + 8; // Discriminator + tokens amount
+}
+
 impl TotalWonPoints {
     const LEN: usize = 8 + 8; // Discriminator + amount
 }
@@ -598,4 +631,3 @@ fn pubkey_to_number(pubkey: &Pubkey) -> u32 {
     }
     (number % 100_000) + 1
 }
-
