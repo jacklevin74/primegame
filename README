@@ -1,0 +1,77 @@
+# Prime Miner
+Prime Miner is a unique variation of crypto mining where miners compete to win Treasury SOL by finding special types of prime numbers instead of hashes. Every miner buys points to participate, with each mining round costing 10 points. The goal is to find prime numbers, which are unpredictable like random hashes. If you're caught spamming, your power-up level drops to 10%, limiting your winnings to 1/10th of the treasury. However, waiting for your miner to "Power-up" can allow you to win 75% of the treasury, though others might win significant SOL before you. Winners are determined when the sum of given numbers is prime, with a special reward for "SuperPrimes" ending in 01. Successful miners earn both SOL and points, enabling continuous play. If you run out of points, you must buy more to continue, contributing SOL to the Treasury for others to compete for. The Yield Pool collects 10% of all points purchased, redeemable by burning points for a share of the pool. The goal is to introduce RUST programming and demonstrate the Xolana Testnet Blockchain's performance. Check out the leaderboard demo here: http://216.202.227.220:3333/.
+
+## Features
+- Initialize various accounts such as Jackpot, Treasury, Player List, Leaderboard, and User.
+- Check if a number is prime and reward users accordingly.
+- Pay for points using SOL.
+- Claim lamports based on user’s won points.
+- Maintain a leaderboard of users.
+
+## Dependencies
+### Install Solana CLI 
+```
+sh -c "$(curl -sSfL https://release.solana.com/v1.18.15/install)"
+export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH" 
+solana --version 
+```
+
+### Create keypair
+```solana-keygen new --no-passphrase -o ~/.config/solana/id.json```
+
+### Install Rust 
+```
+curl https://sh.rustup.rs -sSf | sh 
+source $HOME/.cargo/env 
+rustup component add rustfmt 
+rustup update 
+```
+
+### Install system dependencies 
+```
+sudo apt-get update 
+sudo apt-get install -y libssl-dev libudev-dev pkg-config zlib1g-dev llvm clang cmake make libprotobuf-dev protobuf-compiler 
+```
+
+### Install yarn
+```
+sudo apt update && sudo apt install npm
+sudo npm install --global yarn
+yarn --version
+```
+
+### Install Anchor using AVM 
+```
+cargo install --git https://github.com/coral-xyz/anchor avm --locked --force 
+avm install latest 
+avm use latest
+```
+
+## Set Up Prime Miner As An Anchor Project
+### Clone the repository
+
+```git clone https://github.com/jacklevin74/primegame.git```
+
+### Initialize a new Anchor project
+```
+anchor init primegame
+cd primegame
+```
+
+### Set the network and get some SOL
+```
+solana config set -u https://xolana.xen.network
+solana airdrop 100
+```
+
+### Install Mocha
+```npm install --save-dev ts-mocha mocha typescript ts-node yarn```
+
+### Build the program
+```anchor build```
+
+### Test the program
+```anchor test –skip-deploy```
+
+## Contribution
+Contributions are welcome! Please fork this repository and submit a pull request for any features, bug fixes, or improvements.
