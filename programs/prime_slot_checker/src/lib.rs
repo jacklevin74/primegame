@@ -80,6 +80,11 @@ pub mod prime_slot_checker {
         Ok(())
     }
 
+    pub fn initialize_rate(ctx: Context<InitializeRate>, _bump: u8) -> Result<()> {
+        let rate = &mut ctx.accounts.rate;
+        msg!("Rate account initialized {}", rate.key());
+        Ok(())
+    }
 
     pub fn check_slot(ctx: Context<CheckSlot>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
@@ -87,12 +92,12 @@ pub mod prime_slot_checker {
         let treasury = &mut ctx.accounts.treasury;
         let payer = &ctx.accounts.payer;
         let player_list = &mut ctx.accounts.player_list;
-        let leaderboard = &mut ctx.accounts.leaderboard;
+        // let leaderboard = &mut ctx.accounts.leaderboard;
         let total_won_points = &mut ctx.accounts.total_won_points;
         let rate = &mut ctx.accounts.rate;
         let staking_treasury = &ctx.accounts.staking_treasury;
 
-        // Prevent transaction if user points are 0 or less
+        // Prevent transaction if user points are 10 or less
         if user.points <= 10 {
             return Err(ProgramError::InsufficientFunds.into());
         }
@@ -131,10 +136,24 @@ pub mod prime_slot_checker {
         // Calculate the number to test
         let number_to_test = slot + user_number as u64 + recent_players_sum + time_number;
 
+        // deduct from user and total won points when user starts spending won points
+        if user.points <= user.won_points {
+            user.won_points -= 10;
+            if total_won_points.points >= 10 {
+                total_won_points.points -= 10 as u64;
+            } else {
+                total_won_points.points = 0;
+            }
+        }
+
+        // insert points in miner
+        user.points -= 10;
+        jackpot.amount += 10;
+
         // Check if the resulting number is prime
         if is_prime(number_to_test, 5) {
-            let reward_points = (jackpot.amount as f64 * power_up) as i64;
-            user.points -= 10;
+            let reward_points = (jackpot.amount as f64 * power_up).round() as i64;
+
             user.points += reward_points;
             user.won_points += reward_points;
             total_won_points.points += reward_points as u64;
@@ -142,7 +161,11 @@ pub mod prime_slot_checker {
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
 
-            transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
+            // only reward lamports when a super prime was mined
+            if number_to_test % 100 == 1 {
+                transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
+            }
+
             msg!("User won with {} power-up", power_up);
 
             // Send event
@@ -163,10 +186,7 @@ pub mod prime_slot_checker {
             } else {
                 jackpot.amount = 0;
             }
-
         } else {
-            jackpot.amount += 10;
-            user.points -= 10;
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is not prime. Jackpot pool increased by 10 points.", slot, user_number, recent_players_sum, time_number, number_to_test);
         }
 
@@ -214,6 +234,7 @@ pub mod prime_slot_checker {
         **payer.to_account_info().lamports.borrow_mut() += lamports_to_transfer;
 
         // Deduct 1000 won points from user
+        user.points -= 1000;
         user.won_points -= 1000;
         total_won_points.points -= 1000;
 
@@ -230,11 +251,11 @@ pub mod prime_slot_checker {
         let staking_treasury = &mut ctx.accounts.staking_treasury;
         let payer = &ctx.accounts.payer;
 
-        // Transfer 1 SOL to the treasury using the system program
+        // Transfer 0.8 SOL to the treasury using the system program
         let transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
             &payer.key(),
             &treasury.key(),
-            1_000_000_000,
+            800_000_000,
         );
         anchor_lang::solana_program::program::invoke(
             &transfer_instruction,
@@ -245,11 +266,11 @@ pub mod prime_slot_checker {
             ],
         )?;
 
-        // Transfer 0.1 SOL to the staking treasury
+        // Transfer 0.2 SOL to the staking treasury
         let staking_transfer_instruction = anchor_lang::solana_program::system_instruction::transfer(
             &payer.key(),
             &staking_treasury.key(),
-            100_000_000,
+            200_000_000,
         );
         anchor_lang::solana_program::program::invoke(
             &staking_transfer_instruction,
@@ -270,12 +291,13 @@ pub mod prime_slot_checker {
 
     pub fn claim_lamports(ctx: Context<ClaimLamports>, _bump: u8) -> Result<()> {
         let user = &mut ctx.accounts.user;
-        let total_won_points = &ctx.accounts.total_won_points;
-        let _staking_treasury = &mut ctx.accounts.staking_treasury;
-        let _payer = &ctx.accounts.payer;
+        let staking_treasury = &mut ctx.accounts.staking_treasury;
+        let payer = &ctx.accounts.payer;
+        let total_won_points = &mut ctx.accounts.total_won_points;
 
         // Calculate the ratio of user's won points to total won points
-        let ratio = user.won_points as f64 / total_won_points.points as f64;
+        let user_won_points = user.won_points as u64;
+        let ratio = user_won_points as f64 / total_won_points.points as f64;
         msg!("User ratio: {}", ratio);
         msg!("User last claimed slot: {}", user.last_claimed_slot);
         msg!("User last claimed lamports: {}", user.last_claimed_lamports);
@@ -284,14 +306,21 @@ pub mod prime_slot_checker {
         let current_slot = Clock::get()?.slot;
 
         // Transfer lamports from staking treasury to the payer
-        // let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
+        let lamports_transferred = transfer_from_staking_treasury(staking_treasury, payer, ratio)?;
 
         // Update user's last claimed slot and last claimed lamports
         user.last_claimed_slot = current_slot;
-        //user.last_claimed_lamports = lamports_transferred;
+        user.last_claimed_lamports = lamports_transferred;
+
+        // Deduct user won points from total
+        total_won_points.points -= user_won_points;
+
+        // All points swapped for lamports
+        user.won_points = 0;
+        user.points = 0;
 
         msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
-        //msg!("Updated user last claimed lamports: {}", user.last_claimed_lamports);
+        msg!("Updated user last claimed lamports: {} with {} points", user.last_claimed_lamports, user_won_points);
 
         Ok(())
     }
@@ -315,7 +344,6 @@ fn calculate_point_rate_internal(
     Ok(())
 }
 
-/*
 fn transfer_from_staking_treasury(
     staking_treasury: &mut Account<StakingTreasury>,
     payer: &Signer,
@@ -338,7 +366,6 @@ fn transfer_from_staking_treasury(
     msg!("Transferred {} lamports from staking treasury {} to user {}", transfer_amount, staking_treasury.key(), payer.key());
     Ok(transfer_amount)
 }
-*/
 
 fn transfer_from_treasury(treasury: &mut Account<Treasury>, payer: &Signer, number_to_test: u64, power_up: f64) -> Result<()> {
     let treasury_balance = **treasury.to_account_info().lamports.borrow();
@@ -366,7 +393,7 @@ fn update_player_list(player_list: &mut Account<PlayerList>, new_player: Pubkey)
     }
     player_list.players.push(new_player);
 }
-
+/*
 fn update_leaderboard(leaderboard: &mut Account<Leaderboard>, user: Pubkey, points: i64) {
     // Remove the user if they are already in the leaderboard
     leaderboard.users.retain(|entry| entry.user != user);
@@ -381,7 +408,7 @@ fn update_leaderboard(leaderboard: &mut Account<Leaderboard>, user: Pubkey, poin
     // Log the specific user and their points
     msg!("Leaderboard: User: {}, Points: {}", user.to_string(), points);
 }
-
+*/
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(init_if_needed, payer = payer, space = Jackpot::LEN, seeds = [b"jackpot"], bump)]
