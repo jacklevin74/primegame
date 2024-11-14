@@ -317,7 +317,11 @@ pub mod prime_slot_checker {
 
         // All points swapped for lamports
         user.won_points = 0;
-        user.points = 0;
+
+        // Deduct user won points from user points
+        if user_won_points <= user.points as u64 {
+            user.points -= user_won_points as i64;
+        }
 
         msg!("Updated user last claimed slot: {}", user.last_claimed_slot);
         msg!("Updated user last claimed lamports: {} with {} points", user.last_claimed_lamports, user_won_points);
