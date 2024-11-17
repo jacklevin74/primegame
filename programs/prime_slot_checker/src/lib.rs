@@ -161,10 +161,7 @@ pub mod prime_slot_checker {
             jackpot.winner = payer.key(); // Assign the payer's pubkey as the winner
             msg!("Slot {} + User number {} + Players sum {} + Time number {} = {} is prime. Payer {} rewarded with {} points.", slot, user_number, recent_players_sum, time_number, number_to_test, payer.key(), reward_points);
 
-            // only reward lamports when a super prime was mined
-            if number_to_test % 100 == 1 {
-                transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
-            }
+            transfer_from_treasury(treasury, payer, number_to_test, power_up)?;
 
             msg!("User won with {} power-up", power_up);
 
